@@ -1,0 +1,14 @@
+﻿import { fail, ok } from '@/core/http'
+import { requireAdmin } from '@/modules/security/guards'
+import { updateProductPricingRule } from '@/features/admin/products.service'
+
+export async function PUT(request: Request, ctx: { params: { id: string } }) {
+  try {
+    await requireAdmin()
+    const body = await request.json()
+    const result = await updateProductPricingRule(ctx.params.id, body)
+    return ok(result)
+  } catch (error) {
+    return fail(error)
+  }
+}
