@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { fail, ok } from '@/core/http'
 import { createManualOrderByAdmin, getManualOrdersForAdmin } from '@/features/orders/service'
@@ -43,6 +44,9 @@ export async function POST(request: Request) {
       note: body.note,
     })
 
+    for (const path of ['/admin', '/admin/orders', '/admin/manual-orders', '/admin/reports']) {
+      revalidatePath(path)
+    }
     return ok(created, { status: 201 })
   } catch (error) {
     return fail(error)

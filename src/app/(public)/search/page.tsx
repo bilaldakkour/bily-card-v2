@@ -11,8 +11,12 @@ export default async function SearchPage({ searchParams }: { searchParams: { q?:
   const filtered = q ? searchCatalogItems(products, q) : []
 
   return (
-    <section className='space-y-4'>
-      <h1 className='text-2xl font-bold'>البحث</h1>
+    <section className='storefront-subpage-shell space-y-4'>
+      <div className='storefront-subpage-hero'>
+        <span className='storefront-subpage-kicker'>Bily Card</span>
+        <h1 className='storefront-subpage-title'>البحث</h1>
+        <p className='storefront-subpage-copy'>نتائج موحّدة من نفس نسق المتجر الرئيسي، مع بحث مباشر داخل المنتجات.</p>
+      </div>
       <form className='card-shell p-3' action='/search'>
         <input name='q' defaultValue={searchParams.q ?? ''} className='input-shell' placeholder='ابحث عن المنتج...' />
       </form>
@@ -28,7 +32,7 @@ export default async function SearchPage({ searchParams }: { searchParams: { q?:
       ) : filtered.length === 0 ? (
         <div className='card-shell p-6 text-sm text-slate-300'>لا توجد نتائج مطابقة لـ &quot;{searchParams.q}&quot;.</div>
       ) : (
-        <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3'>
+        <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
           {filtered.map((item) => (
             <ProductCard key={item.id} product={item} />
           ))}

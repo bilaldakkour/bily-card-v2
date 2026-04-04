@@ -4,6 +4,7 @@ import { toMinor } from '@/core/money'
 import { connectDb } from '@/modules/db/connection'
 import { getProviderAdapter } from '@/modules/providers/registry'
 import { getOrderPricingSnapshot } from '@/modules/catalog/service'
+import { isSupabaseProvider } from '@/modules/db/provider'
 import {
   ManualOrderAuditLogModel,
   ManualOrderModel,
@@ -14,6 +15,16 @@ import {
   UserModel,
   WalletTransactionModel,
 } from '@/domain/models'
+import {
+  createManualOrderByAdminSupabase,
+  getCustomerOrdersSupabase,
+  getManualOrdersForAdminSupabase,
+  getOrderDetailForUserSupabase,
+  getOrdersForAdminSupabase,
+  placeOrderSupabase,
+  updateManualOrderStatusByAdminSupabase,
+  updateOrderDecisionByAdminSupabase,
+} from './supabase-service'
 
 type AdminManualCreateStatus = 'pending' | 'processing' | 'completed' | 'cancelled'
 
@@ -31,6 +42,10 @@ export async function placeOrder(input: {
   packageKey?: string
   countValue?: number
 }) {
+  if (isSupabaseProvider()) {
+    return placeOrderSupabase(input)
+  }
+
   await connectDb()
 
   const pricing = await getOrderPricingSnapshot({
@@ -377,6 +392,10 @@ async function getWalletTrailByOrderIds(orderIds: string[]) {
 }
 
 export async function getCustomerOrders(userId: string, page: number = 1, pageSize: number = 20) {
+  if (isSupabaseProvider()) {
+    return getCustomerOrdersSupabase(userId, page, pageSize)
+  }
+
   await connectDb()
 
   const pendingProviderOrders = await OrderModel.find({
@@ -417,6 +436,10 @@ export async function getCustomerOrders(userId: string, page: number = 1, pageSi
 }
 
 export async function getOrderDetailForUser(orderId: string, userId: string) {
+  if (isSupabaseProvider()) {
+    return getOrderDetailForUserSupabase(orderId, userId)
+  }
+
   await connectDb()
 
   await syncProviderOrderStatus(orderId)
@@ -455,6 +478,10 @@ export async function getOrderDetailForUser(orderId: string, userId: string) {
 }
 
 export async function getOrdersForAdmin(filters: { status?: string; from?: Date; to?: Date; page?: number; pageSize?: number }) {
+  if (isSupabaseProvider()) {
+    return getOrdersForAdminSupabase(filters)
+  }
+
   await connectDb()
 
   const pendingProviderOrders = await OrderModel.find({
@@ -515,6 +542,10 @@ export async function getOrdersForAdmin(filters: { status?: string; from?: Date;
 }
 
 export async function updateOrderDecisionByAdmin(input: { orderId: string; adminId: string; action: 'accept' | 'reject' }) {
+  if (isSupabaseProvider()) {
+    return updateOrderDecisionByAdminSupabase(input)
+  }
+
   await connectDb()
 
   const session = await mongoose.startSession()
@@ -644,6 +675,10 @@ export async function updateOrderDecisionByAdmin(input: { orderId: string; admin
 }
 
 export async function getManualOrdersForAdmin() {
+  if (isSupabaseProvider()) {
+    return getManualOrdersForAdminSupabase()
+  }
+
   await connectDb()
 
   const manualItems = await ManualOrderModel.find({})
@@ -727,6 +762,10 @@ export async function createManualOrderByAdmin(input: {
   status: AdminManualCreateStatus
   note?: string
 }) {
+  if (isSupabaseProvider()) {
+    return createManualOrderByAdminSupabase(input)
+  }
+
   await connectDb()
   const session = await mongoose.startSession()
 
@@ -857,6 +896,10 @@ export async function updateManualOrderStatusByAdmin(input: {
   status: 'pending' | 'processing' | 'done' | 'cancelled'
   note?: string
 }) {
+  if (isSupabaseProvider()) {
+    return updateManualOrderStatusByAdminSupabase(input)
+  }
+
   await connectDb()
   const session = await mongoose.startSession()
 

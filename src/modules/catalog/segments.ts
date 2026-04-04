@@ -69,6 +69,17 @@ const segmentConfigs: Record<Exclude<CatalogSegment, 'top'>, SegmentConfig> = {
   },
 }
 
+export const storefrontCatalogSegments: Exclude<CatalogSegment, 'top'>[] = [
+  'games',
+  'apps',
+  'cards',
+  'wallets',
+  'balance',
+  'social',
+  'entertainment',
+  'accounts',
+]
+
 export function isCatalogSegment(value: string | undefined): value is CatalogSegment {
   if (!value) return false
   return value === 'top' || value in segmentConfigs
@@ -77,7 +88,7 @@ export function isCatalogSegment(value: string | undefined): value is CatalogSeg
 export function getCatalogSegmentMeta(segment: CatalogSegment) {
   if (segment === 'top') {
     return {
-      title: 'المنتجات الأكثر مبيعاً',
+      title: 'المنتجات الأكثر مبيعًا',
       subtitle: 'اختيارات مطلوبة الآن داخل Bily Card',
       accent: 'cyan' as const,
     }
@@ -87,7 +98,7 @@ export function getCatalogSegmentMeta(segment: CatalogSegment) {
 }
 
 export function getProductsForSegment(products: CatalogListItem[], segment: CatalogSegment) {
-  if (segment === 'top') return products.slice(0, 9)
+  if (segment === 'top') return products
 
   const { keywords } = segmentConfigs[segment]
 
@@ -96,5 +107,4 @@ export function getProductsForSegment(products: CatalogListItem[], segment: Cata
       const haystack = `${product.name} ${product.category} ${product.description}`.toLowerCase()
       return keywords.some((keyword) => haystack.includes(keyword.toLowerCase()))
     })
-    .slice(0, 9)
 }

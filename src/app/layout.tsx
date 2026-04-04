@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           id='bily-theme-init'
           strategy='beforeInteractive'
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var key='bily-theme';var saved=localStorage.getItem(key);var system=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';var theme=(saved==='light'||saved==='dark')?saved:system;document.documentElement.setAttribute('data-theme',theme);document.documentElement.style.colorScheme=theme;}catch(e){document.documentElement.setAttribute('data-theme','dark');document.documentElement.style.colorScheme='dark';}})();`,
+            __html: `(function(){try{var key='bily-theme';var saved=localStorage.getItem(key);var theme=(saved==='light'||saved==='dark')?saved:'dark';var root=document.documentElement;root.classList.toggle('dark',theme==='dark');root.style.colorScheme=theme;}catch(e){var root=document.documentElement;root.classList.add('dark');root.style.colorScheme='dark';}})();`,
           }}
         />
         <Script

@@ -1,16 +1,11 @@
-﻿import { fail, ok } from '@/core/http'
+import { fail, ok } from '@/core/http'
+import { listProviderSettings, saveProviderSettings } from '@/features/admin/providers.service'
 import { requireAdmin } from '@/modules/security/guards'
-import { connectDb } from '@/modules/db/connection'
-import { ProviderSettingsModel } from '@/domain/models'
 
 export async function GET() {
   try {
     await requireAdmin()
-    await connectDb()
-    const settings = await ProviderSettingsModel.find({})
-      .select({ provider: 1, baseUrl: 1, enabled: 1, timeoutMs: 1, updatedAt: 1 })
-      .sort({ provider: 1 })
-      .lean()
+    const settings = await listProviderSettings()
     return ok(settings)
   } catch (error) {
     return fail(error)
@@ -20,7 +15,6 @@ export async function GET() {
 export async function PUT(request: Request) {
   try {
     await requireAdmin()
-    await connectDb()
     const body = (await request.json()) as {
       provider: 'daily_card' | 'go4_card'
       baseUrl: string
@@ -28,16 +22,7 @@ export async function PUT(request: Request) {
       timeoutMs: number
     }
 
-    await ProviderSettingsModel.findOneAndUpdate(
-      { provider: body.provider },
-      {
-        provider: body.provider,
-        baseUrl: body.baseUrl,
-        enabled: body.enabled,
-        timeoutMs: body.timeoutMs,
-      },
-      { upsert: true }
-    )
+    await saveProviderSettings(body)
 
     return ok({ success: true })
   } catch (error) {

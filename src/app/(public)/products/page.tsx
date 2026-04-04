@@ -46,7 +46,13 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
   if (sort === 'price_desc') filtered = [...filtered].sort((a, b) => b.finalPriceFrom - a.finalPriceFrom)
 
   return (
-    <section className='products-shell'>
+    <section className='storefront-subpage-shell products-shell'>
+      <div className='storefront-subpage-hero'>
+        <span className='storefront-subpage-kicker'>Bily Card</span>
+        <h1 className='storefront-subpage-title'>كل المنتجات</h1>
+        <p className='storefront-subpage-copy'>تصفية واضحة ومنظّمة لكل منتجات المتجر بنفس إيقاع الصفحة الرئيسية.</p>
+      </div>
+
       <div className='products-title-row'>
         <h1 className='text-2xl font-bold'>كل المنتجات</h1>
         <span className='text-xs text-slate-400'>{filtered.length} نتيجة</span>

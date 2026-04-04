@@ -18,6 +18,7 @@ type AdminBanner = {
 
 export function AdminBannersManager({ initialBanners }: { initialBanners: AdminBanner[] }) {
   const [banners, setBanners] = useState(initialBanners)
+  const [bannerFiles, setBannerFiles] = useState<Record<string, File | null>>({})
   const [status, setStatus] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState({
@@ -25,7 +26,7 @@ export function AdminBannersManager({ initialBanners }: { initialBanners: AdminB
     subtitle: '',
     linkUrl: '',
     badge: '',
-    sortOrder: '1',
+    sortOrder: '',
     isActive: true,
     image: null as File | null,
   })
@@ -71,7 +72,7 @@ export function AdminBannersManager({ initialBanners }: { initialBanners: AdminB
         subtitle: '',
         linkUrl: '',
         badge: '',
-        sortOrder: '1',
+        sortOrder: '',
         isActive: true,
         image: null,
       })
@@ -82,21 +83,31 @@ export function AdminBannersManager({ initialBanners }: { initialBanners: AdminB
   }
 
   async function saveBanner(banner: AdminBanner) {
+    const body = new FormData()
+    body.set('title', banner.title)
+    body.set('subtitle', banner.subtitle)
+    body.set('imageUrl', banner.imageUrl ?? '')
+    body.set('removeImage', 'false')
+    body.set('linkUrl', banner.linkUrl ?? '')
+    body.set('badge', banner.badge ?? '')
+    body.set('isActive', String(banner.isActive))
+    body.set('sortOrder', String(banner.sortOrder))
+
+    const nextImage = bannerFiles[banner.id]
+    if (nextImage) {
+      body.set('image', nextImage)
+    }
+
     const res = await fetch(`/api/admin/banners/${banner.id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: banner.title,
-        subtitle: banner.subtitle,
-        linkUrl: banner.linkUrl ?? '',
-        badge: banner.badge ?? '',
-        isActive: banner.isActive,
-        sortOrder: banner.sortOrder,
-      }),
+      body,
     })
 
     setStatus(res.ok ? 'تم حفظ التعديلات' : 'فشل حفظ التعديلات')
-    if (res.ok) await refresh()
+    if (res.ok) {
+      setBannerFiles((current) => ({ ...current, [banner.id]: null }))
+      await refresh()
+    }
   }
 
   async function deleteBanner(id: string) {
@@ -107,6 +118,33 @@ export function AdminBannersManager({ initialBanners }: { initialBanners: AdminB
 
   function updateBanner(id: string, key: keyof AdminBanner, value: string | boolean | number) {
     setBanners((current) => current.map((banner) => (banner.id === id ? { ...banner, [key]: value } : banner)))
+  }
+
+  async function hideBannerImage(banner: AdminBanner) {
+    setBanners((current) =>
+      current.map((item) => (item.id === banner.id ? { ...item, imageUrl: '' } : item))
+    )
+    setBannerFiles((current) => ({ ...current, [banner.id]: null }))
+
+    const body = new FormData()
+    body.set('title', banner.title)
+    body.set('subtitle', banner.subtitle)
+    body.set('imageUrl', '')
+    body.set('removeImage', 'true')
+    body.set('linkUrl', banner.linkUrl ?? '')
+    body.set('badge', banner.badge ?? '')
+    body.set('isActive', String(banner.isActive))
+    body.set('sortOrder', String(banner.sortOrder))
+
+    const res = await fetch(`/api/admin/banners/${banner.id}`, {
+      method: 'PATCH',
+      body,
+    })
+
+    setStatus(res.ok ? 'تم إخفاء صورة البانر' : 'فشل إخفاء صورة البانر')
+    if (res.ok) {
+      await refresh()
+    }
   }
 
   return (
@@ -152,7 +190,7 @@ export function AdminBannersManager({ initialBanners }: { initialBanners: AdminB
         </div>
 
         <div className='flex flex-wrap items-center gap-2'>
-          <Button onClick={createBanner} disabled={submitting}>
+          <Button type='button' onClick={createBanner} disabled={submitting}>
             {submitting ? 'جارٍ الرفع...' : 'إضافة البانر'}
           </Button>
           {status ? <span className='text-xs text-cyan-300'>{status}</span> : null}
@@ -163,7 +201,9 @@ export function AdminBannersManager({ initialBanners }: { initialBanners: AdminB
         {banners.map((banner) => (
           <div key={banner.id} className='card-shell space-y-3 p-4'>
             <div className='flex flex-col gap-3 lg:flex-row lg:items-start'>
-              <img src={banner.imageUrl} alt={banner.title} className='h-32 w-full rounded-2xl object-cover lg:w-64' />
+              {banner.imageUrl ? (
+                <img src={banner.imageUrl} alt={banner.title} className='h-32 w-full rounded-2xl object-cover lg:w-64' />
+              ) : null}
 
               <div className='grid flex-1 gap-3 sm:grid-cols-2'>
                 <Input value={banner.title} onChange={(e) => updateBanner(banner.id, 'title', e.target.value)} placeholder='عنوان' />
@@ -184,14 +224,36 @@ export function AdminBannersManager({ initialBanners }: { initialBanners: AdminB
                   />
                   ظاهر في السلايدر
                 </label>
+                <label className='input-shell flex flex-col items-start gap-2 text-sm text-slate-300 sm:col-span-2'>
+                  <span>تبديل صورة البانر</span>
+                  <input
+                    type='file'
+                    accept='image/*'
+                    onChange={(e) =>
+                      setBannerFiles((current) => ({
+                        ...current,
+                        [banner.id]: e.target.files?.[0] ?? null,
+                      }))
+                    }
+                    className='block w-full text-sm text-slate-300 file:mr-3 file:rounded-xl file:border-0 file:bg-cyan-500/15 file:px-3 file:py-2 file:text-cyan-100'
+                  />
+                </label>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  className='sm:col-span-2'
+                  onClick={() => hideBannerImage(banner)}
+                >
+                  إخفاء الصورة الحالية
+                </Button>
               </div>
             </div>
 
             <div className='flex flex-wrap items-center gap-2'>
-              <Button variant='secondary' onClick={() => saveBanner(banner)}>
+              <Button type='button' variant='secondary' onClick={() => saveBanner(banner)}>
                 حفظ
               </Button>
-              <Button variant='secondary' className='border-rose-400/40 text-rose-200' onClick={() => deleteBanner(banner.id)}>
+              <Button type='button' variant='secondary' className='border-rose-400/40 text-rose-200' onClick={() => deleteBanner(banner.id)}>
                 حذف
               </Button>
             </div>

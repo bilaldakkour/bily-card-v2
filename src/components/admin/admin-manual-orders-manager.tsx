@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { fromMinor, roundVisible } from '@/core/money'
 import { AdminPageShell } from '@/components/admin/admin-page-shell'
 import { Button } from '@/components/ui/button'
@@ -71,6 +72,7 @@ export function AdminManualOrdersManager({
   users: AdminUserOption[]
   products: ProductOption[]
 }) {
+  const router = useRouter()
   const [items, setItems] = useState(initial)
   const [message, setMessage] = useState('')
   const [notes, setNotes] = useState<Record<string, string>>({})
@@ -130,6 +132,7 @@ export function AdminManualOrdersManager({
     setMessage('تم إنشاء الطلب اليدوي بنجاح')
     setIsSubmitting(false)
     await refresh()
+    router.refresh()
   }
 
   async function updateStatus(id: string, status: ManualOrderRow['manualStatus']) {
@@ -147,6 +150,7 @@ export function AdminManualOrdersManager({
 
     setMessage('تم تحديث الطلب اليدوي')
     await refresh()
+    router.refresh()
   }
 
   return (

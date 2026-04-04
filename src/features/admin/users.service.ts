@@ -1,9 +1,38 @@
-﻿import mongoose from 'mongoose'
+import mongoose from 'mongoose'
 import { ApiError } from '@/core/http'
 import { connectDb } from '@/modules/db/connection'
+import { createDatabaseUnavailableError, isMongoEnabled, isSupabaseProvider } from '@/modules/db/provider'
 import { UserModel } from '@/domain/models'
+import { listSupabaseUsers, saveSupabaseUserAdminState } from '@/modules/supabase/commerce-store'
 
 export async function listAdminUsers(input: { q?: string; role?: 'all' | 'customer' | 'admin'; limit?: number }) {
+  if (isSupabaseProvider()) {
+    const q = (input.q ?? '').trim().toLowerCase()
+    const role = input.role ?? 'all'
+    const limit = Math.min(300, Math.max(1, input.limit ?? 200))
+
+    return (await listSupabaseUsers())
+      .filter((item: any) => {
+        const matchesQuery = !q || item.name.toLowerCase().includes(q) || item.email.toLowerCase().includes(q)
+        const matchesRole = role === 'all' || item.role === role
+        return matchesQuery && matchesRole
+      })
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit)
+      .map((item: any) => ({
+        _id: item.userId,
+        name: item.name,
+        email: item.email,
+        role: item.role,
+        isActive: item.isActive,
+        walletBalanceMinor: item.walletBalanceMinor,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      }))
+  }
+
+  if (!isMongoEnabled()) return []
+
   await connectDb()
 
   const q = (input.q ?? '').trim()
@@ -34,6 +63,52 @@ export async function updateUserByAdmin(input: {
   role?: 'customer' | 'admin'
   isActive?: boolean
 }) {
+  if (isSupabaseProvider()) {
+    const users = await listSupabaseUsers()
+    const target = users.find((item: any) => item.userId === input.userId || item.id === input.userId)
+    if (!target) {
+      throw new ApiError(404, 'USER_NOT_FOUND', 'User not found')
+    }
+
+    if (target.userId === input.adminId) {
+      if (input.role && input.role !== 'admin') {
+        throw new ApiError(409, 'SELF_ROLE_CHANGE_FORBIDDEN', 'Admin cannot remove own admin role')
+      }
+
+      if (input.isActive === false) {
+        throw new ApiError(409, 'SELF_DEACTIVATE_FORBIDDEN', 'Admin cannot deactivate own account')
+      }
+    }
+
+    const nextRole = input.role ?? target.role
+    const nextActive = typeof input.isActive === 'boolean' ? input.isActive : target.isActive
+
+    if (target.role === 'admin' && target.isActive && (nextRole !== 'admin' || !nextActive)) {
+      const activeAdmins = users.filter((item: any) => item.role === 'admin' && item.isActive).length
+      if (activeAdmins <= 1) {
+        throw new ApiError(409, 'LAST_ADMIN_PROTECTED', 'Cannot disable the last active admin')
+      }
+    }
+
+    await saveSupabaseUserAdminState(target, {
+      role: nextRole,
+      isActive: nextActive,
+    })
+
+    return {
+      _id: target.userId,
+      name: target.name,
+      email: target.email,
+      role: nextRole,
+      isActive: nextActive,
+      walletBalanceMinor: target.walletBalanceMinor,
+      createdAt: target.createdAt,
+      updatedAt: new Date().toISOString(),
+    }
+  }
+
+  if (!isMongoEnabled()) throw createDatabaseUnavailableError('Admin user management')
+
   await connectDb()
 
   if (!mongoose.isValidObjectId(input.userId)) {

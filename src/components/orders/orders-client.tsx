@@ -37,8 +37,12 @@ export function OrdersClient({ initial }: { initial: OrdersPayload }) {
   }
 
   return (
-    <section className='orders-shell space-y-4'>
-      <h1 className='text-2xl font-bold'>الطلبات</h1>
+    <section className='storefront-subpage-shell orders-shell space-y-4'>
+      <div className='storefront-subpage-hero'>
+        <span className='storefront-subpage-kicker'>Bily Card</span>
+        <h1 className='storefront-subpage-title'>الطلبات</h1>
+        <p className='storefront-subpage-copy'>متابعة الطلبات وتفاصيلها من نفس نسق الواجهة الرئيسية بدون تغيير المنطق الحالي.</p>
+      </div>
       <div className='grid gap-3.5 lg:grid-cols-[1fr_1fr]'>
         <div className='space-y-2'>
           {orders.items.length === 0 ? <div className='list-empty-shell p-4 text-sm text-slate-300'>لا توجد طلبات حالياً.</div> : null}

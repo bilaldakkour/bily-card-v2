@@ -112,8 +112,12 @@ export function WalletClient({
   }
 
   return (
-    <section className='wallet-shell space-y-4'>
-      <h1 className='text-2xl font-bold'>المحفظة</h1>
+    <section className='storefront-subpage-shell wallet-shell space-y-4'>
+      <div className='storefront-subpage-hero'>
+        <span className='storefront-subpage-kicker'>Bily Card</span>
+        <h1 className='storefront-subpage-title'>المحفظة</h1>
+        <p className='storefront-subpage-copy'>الرصيد والمعاملات وطلبات الإيداع ضمن نفس اللغة البصرية للصفحة الرئيسية.</p>
+      </div>
 
       <div className='wallet-stat-grid'>
         <div className='wallet-stat-card p-4'>

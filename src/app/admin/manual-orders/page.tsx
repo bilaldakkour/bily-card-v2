@@ -1,26 +1,34 @@
 export const dynamic = 'force-dynamic'
 
-import { ProductModel, UserModel } from '@/domain/models'
 import { AdminManualOrdersManager } from '@/components/admin/admin-manual-orders-manager'
 import { getManualOrdersForAdmin } from '@/features/orders/service'
-import { connectDb } from '@/modules/db/connection'
+import { isMongoEnabled, isSupabaseProvider } from '@/modules/db/provider'
+import { listSupabaseProducts } from '@/modules/supabase/catalog-store'
+import { listSupabaseUsers } from '@/modules/supabase/commerce-store'
 
 export default async function AdminManualOrdersPage() {
-  await connectDb()
+  const [initial, usersRaw, productsRaw] = isSupabaseProvider()
+    ? await Promise.all([getManualOrdersForAdmin(), listSupabaseUsers(), listSupabaseProducts()])
+    : isMongoEnabled()
+      ? await import('@/modules/db/connection')
+          .then(async ({ connectDb }) => {
+            await connectDb()
+            const { ProductModel, UserModel } = await import('@/domain/models')
+            return Promise.all([
+              getManualOrdersForAdmin(),
+              UserModel.find({ isActive: true }).select({ name: 1, email: 1 }).sort({ name: 1, email: 1 }).lean(),
+              ProductModel.find({ active: true }).select({ name: 1, slug: 1, kind: 1, packages: 1 }).sort({ name: 1 }).lean(),
+            ])
+          })
+      : [[], [], []]
 
-  const [initial, usersRaw, productsRaw] = await Promise.all([
-    getManualOrdersForAdmin(),
-    UserModel.find({ isActive: true }).select({ name: 1, email: 1 }).sort({ name: 1, email: 1 }).lean(),
-    ProductModel.find({ active: true }).select({ name: 1, slug: 1, kind: 1, packages: 1 }).sort({ name: 1 }).lean(),
-  ])
-
-  const users = usersRaw.map((user: any) => ({
-    _id: String(user._id),
+  const users = (usersRaw as any[]).map((user: any) => ({
+    _id: String(user.userId ?? user._id),
     name: user.name,
     email: user.email,
   }))
 
-  const products = productsRaw.map((product: any) => ({
+  const products = (productsRaw as any[]).map((product: any) => ({
     _id: String(product._id),
     name: product.name,
     slug: product.slug,

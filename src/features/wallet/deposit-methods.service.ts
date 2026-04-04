@@ -1,7 +1,17 @@
 import { z } from 'zod'
 import { ApiError } from '@/core/http'
 import { connectDb } from '@/modules/db/connection'
+import { createDatabaseUnavailableError, isMongoEnabled, isSupabaseProvider } from '@/modules/db/provider'
 import { WalletDepositMethodModel } from '@/domain/models'
+import {
+  deleteDocument,
+  getDocumentById,
+  getDocumentBySlug,
+  isSupabaseNotReadyError,
+  isSupabaseUnavailableError,
+  queryDocuments,
+  writeDocument,
+} from '@/modules/supabase/documents'
 
 const depositMethodSchema = z.object({
   key: z.string().min(1),
@@ -54,7 +64,47 @@ function normalizeMethod(method: any) {
   }
 }
 
+function normalizeSupabaseMethod(method: any) {
+  return {
+    _id: String(method.id),
+    key: method.payload?.key ?? method.slug ?? '',
+    name: method.payload?.name ?? '',
+    type: method.payload?.type ?? 'crypto',
+    network: method.payload?.network ?? '',
+    currency: method.payload?.currency ?? '',
+    address: method.payload?.address ?? '',
+    accountNumber: method.payload?.accountNumber ?? '',
+    phone: method.payload?.phone ?? '',
+    holderName: method.payload?.holderName ?? '',
+    iconUrl: method.payload?.iconUrl ?? '',
+    instructions: method.payload?.instructions ?? '',
+    processingTimeText: method.payload?.processingTimeText ?? '',
+    requiresReceipt: Boolean(method.payload?.requiresReceipt ?? true),
+    minAmount: method.payload?.minAmount ?? null,
+    maxAmount: method.payload?.maxAmount ?? null,
+    feePercent: Number(method.payload?.feePercent ?? 0),
+    feeFixed: Number(method.payload?.feeFixed ?? 0),
+    active: Boolean(method.is_active ?? method.payload?.active ?? true),
+    visible: Boolean(method.is_visible ?? method.payload?.visible ?? true),
+    sortOrder: Number(method.sort_order ?? method.payload?.sortOrder ?? 0),
+    updatedAt: method.updated_at ?? null,
+    createdAt: method.created_at ?? null,
+  }
+}
+
 export async function listAdminDepositMethods() {
+  if (isSupabaseProvider()) {
+    try {
+      const items = await queryDocuments('wallet_deposit_methods')
+      return items.map(normalizeSupabaseMethod)
+    } catch (error) {
+      if (isSupabaseNotReadyError(error)) return []
+      throw error
+    }
+  }
+
+  if (!isMongoEnabled()) return []
+
   await connectDb()
   const items = await WalletDepositMethodModel.find({})
     .sort({ sortOrder: 1, updatedAt: -1 })
@@ -64,6 +114,18 @@ export async function listAdminDepositMethods() {
 }
 
 export async function listPublicDepositMethods() {
+  if (isSupabaseProvider()) {
+    try {
+      const items = await queryDocuments('wallet_deposit_methods', { isActive: true, isVisible: true })
+      return items.map(normalizeSupabaseMethod)
+    } catch (error) {
+      if (isSupabaseNotReadyError(error) || isSupabaseUnavailableError(error)) return []
+      throw error
+    }
+  }
+
+  if (!isMongoEnabled()) return []
+
   await connectDb()
   const items = await WalletDepositMethodModel.find({ active: true, visible: true })
     .sort({ sortOrder: 1, updatedAt: -1 })
@@ -73,6 +135,25 @@ export async function listPublicDepositMethods() {
 }
 
 export async function createDepositMethod(input: unknown) {
+  if (isSupabaseProvider()) {
+    const parsed = depositMethodSchema.parse(input)
+    const exists = await getDocumentBySlug('wallet_deposit_methods', parsed.key)
+    if (exists) throw new ApiError(409, 'METHOD_KEY_EXISTS', 'Deposit method key already exists')
+
+    const created = await writeDocument({
+      collection: 'wallet_deposit_methods',
+      slug: parsed.key,
+      sortOrder: parsed.sortOrder,
+      isActive: parsed.active,
+      isVisible: parsed.visible,
+      payload: parsed,
+    })
+
+    return normalizeSupabaseMethod(created)
+  }
+
+  if (!isMongoEnabled()) throw createDatabaseUnavailableError('Wallet deposit methods')
+
   await connectDb()
   const parsed = depositMethodSchema.parse(input)
 
@@ -84,6 +165,30 @@ export async function createDepositMethod(input: unknown) {
 }
 
 export async function updateDepositMethod(id: string, input: unknown) {
+  if (isSupabaseProvider()) {
+    const parsed = depositMethodSchema.parse(input)
+
+    const existing = await getDocumentById('wallet_deposit_methods', id)
+    if (!existing) throw new ApiError(404, 'METHOD_NOT_FOUND', 'Deposit method not found')
+
+    const duplicate = await getDocumentBySlug('wallet_deposit_methods', parsed.key)
+    if (duplicate && duplicate.id !== id) throw new ApiError(409, 'METHOD_KEY_EXISTS', 'Deposit method key already exists')
+
+    const updated = await writeDocument({
+      id,
+      collection: 'wallet_deposit_methods',
+      slug: parsed.key,
+      sortOrder: parsed.sortOrder,
+      isActive: parsed.active,
+      isVisible: parsed.visible,
+      payload: parsed,
+    })
+
+    return normalizeSupabaseMethod(updated)
+  }
+
+  if (!isMongoEnabled()) throw createDatabaseUnavailableError('Wallet deposit methods')
+
   await connectDb()
   const parsed = depositMethodSchema.parse(input)
 
@@ -102,6 +207,15 @@ export async function updateDepositMethod(id: string, input: unknown) {
 }
 
 export async function deleteDepositMethod(id: string) {
+  if (isSupabaseProvider()) {
+    const existing = await getDocumentById('wallet_deposit_methods', id)
+    if (!existing) throw new ApiError(404, 'METHOD_NOT_FOUND', 'Deposit method not found')
+    await deleteDocument('wallet_deposit_methods', id)
+    return { id }
+  }
+
+  if (!isMongoEnabled()) throw createDatabaseUnavailableError('Wallet deposit methods')
+
   await connectDb()
   const deleted = await WalletDepositMethodModel.findByIdAndDelete(id).lean()
   if (!deleted) throw new ApiError(404, 'METHOD_NOT_FOUND', 'Deposit method not found')

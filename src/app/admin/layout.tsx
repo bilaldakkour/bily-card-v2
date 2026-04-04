@@ -82,10 +82,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <main className='app-shell-surface min-h-screen text-white'>
-      <div className='grid min-h-screen md:grid-cols-[280px_1fr]'>
+      <div className='grid min-h-screen md:grid-cols-[272px_1fr]'>
         <aside className='admin-sidebar-shell hidden border-r border-cyan-400/10 md:sticky md:top-0 md:block md:h-screen'>
           <div className='flex h-full flex-col'>
-            <div className='border-b border-cyan-400/10 px-5 py-6'>
+            <div className='border-b border-cyan-400/10 px-5 py-5'>
               <div className='text-[15px] font-black tracking-tight text-white'>Bily Card Admin</div>
               <div className='mt-1 text-xs text-slate-400'>لوحة تحكم مرتبة لكل وظائف الإدارة</div>
             </div>
@@ -133,15 +133,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
         </aside>
 
-        <section className='min-w-0 bg-transparent'>
-          <header className='header-shell border-b border-cyan-400/10'>
-            <div className='flex flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-7 lg:py-5'>
+        <section className='admin-layout-stage min-w-0 bg-transparent'>
+          <header className='admin-topbar-shell header-shell border-b border-cyan-400/10'>
+            <div className='admin-topbar-inner flex flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-7 lg:py-[1.125rem]'>
               <div>
-                <div className='text-[12px] text-slate-400 sm:text-[13px]'>Admin Panel</div>
-                <h1 className='mt-1 text-xl font-black text-white sm:text-2xl'>{currentItem.label}</h1>
+                <div className='admin-shell-kicker text-[11px] sm:text-xs'>Admin Panel</div>
+                <h1 className='admin-shell-title mt-1'>{currentItem.label}</h1>
               </div>
 
-              <div className='flex items-center gap-3 self-start lg:self-auto'>
+              <div className='flex items-center gap-2.5 self-start lg:self-auto'>
                 <ThemeToggle compact />
                 <Link
                   href='/'
@@ -190,9 +190,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             </div>
           </header>
 
-          <div className='px-3 py-3 sm:px-6 sm:py-5 lg:px-7 lg:py-7'>
-            <div className='panel-soft-surface rounded-[24px] p-3 sm:rounded-[28px] sm:p-5 lg:rounded-[30px] lg:p-6'>
-              {children}
+          <div className='admin-content-wrap px-3 py-3 sm:px-6 sm:py-5 lg:px-7 lg:py-6'>
+            <div className='admin-content-shell panel-soft-surface rounded-[24px] p-3 sm:rounded-[28px] sm:p-5 lg:rounded-[30px] lg:p-6'>
+              <div className='admin-page-frame'>{children}</div>
             </div>
           </div>
         </section>

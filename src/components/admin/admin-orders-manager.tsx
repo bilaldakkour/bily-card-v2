@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { fromMinor } from '@/core/money'
 import { AdminPageShell, AdminStatCard, AdminStatGrid } from '@/components/admin/admin-page-shell'
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,7 @@ type OrdersResponse = {
 }
 
 export function AdminOrdersManager({ initial }: { initial: OrdersResponse }) {
+  const router = useRouter()
   const [data, setData] = useState(initial)
   const [statusFilter, setStatusFilter] = useState('')
   const [message, setMessage] = useState('')
@@ -60,6 +62,7 @@ export function AdminOrdersManager({ initial }: { initial: OrdersResponse }) {
 
     setMessage('تم تحديث الحالة')
     await refresh()
+    router.refresh()
   }
 
   return (

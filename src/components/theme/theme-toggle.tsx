@@ -7,7 +7,7 @@ import { useLocale } from '@/components/i18n/locale-provider'
 type ThemeMode = 'dark' | 'light'
 
 function applyTheme(nextTheme: ThemeMode) {
-  document.documentElement.setAttribute('data-theme', nextTheme)
+  document.documentElement.classList.toggle('dark', nextTheme === 'dark')
   document.documentElement.style.colorScheme = nextTheme
   window.localStorage.setItem('bily-theme', nextTheme)
 }
@@ -24,10 +24,8 @@ export function ThemeToggle({
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    const current = document.documentElement.getAttribute('data-theme')
-    if (current === 'light' || current === 'dark') {
-      setTheme(current)
-    }
+    const current: ThemeMode = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+    setTheme(current)
     setMounted(true)
   }, [])
 

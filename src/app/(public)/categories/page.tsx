@@ -14,8 +14,12 @@ export default async function CategoriesPage() {
   }, {})
 
   return (
-    <section className='space-y-4'>
-      <h1 className='text-2xl font-bold'>التصنيفات</h1>
+    <section className='storefront-subpage-shell space-y-4'>
+      <div className='storefront-subpage-hero'>
+        <span className='storefront-subpage-kicker'>Bily Card</span>
+        <h1 className='storefront-subpage-title'>التصنيفات</h1>
+        <p className='storefront-subpage-copy'>استعراض واضح للتصنيفات المتاحة بنفس الهوية البصرية للواجهة الرئيسية.</p>
+      </div>
       <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
         {Object.entries(grouped).map(([name, meta]) => (
           <Link

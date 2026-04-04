@@ -10,10 +10,11 @@ export default async function SupportPage() {
   const snapshot = session ? await getSupportSnapshot(session.sub) : null
 
   return (
-    <section className='space-y-4'>
-      <div className='rounded-2xl border border-cyan-300/20 bg-gradient-to-br from-[#0f1730] to-[#111b37] p-5'>
-        <h1 className='text-2xl font-black'>الدعم والمساعدة</h1>
-        <p className='mt-2 text-sm text-slate-300'>
+    <section className='storefront-subpage-shell space-y-4'>
+      <div className='storefront-subpage-hero rounded-2xl border border-cyan-300/20 bg-gradient-to-br from-[#0f1730] to-[#111b37] p-5'>
+        <span className='storefront-subpage-kicker'>Bily Card</span>
+        <h1 className='storefront-subpage-title'>الدعم والمساعدة</h1>
+        <p className='storefront-subpage-copy mt-2 text-sm text-slate-300'>
           فريق Bily Card متاح لمشاكل الطلبات، الرصيد، وتأخر التنفيذ. اختر المسار المناسب للحصول على حل أسرع.
         </p>
       </div>

@@ -1,19 +1,41 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
-import { connectDb } from '@/modules/db/connection'
-import { ManualOrderModel, OrderModel, ProductModel, UserModel, WalletDepositRequestModel } from '@/domain/models'
+import { isMongoEnabled, isSupabaseProvider } from '@/modules/db/provider'
+import { listSupabaseProducts } from '@/modules/supabase/catalog-store'
+import { listSupabaseDeposits, listSupabaseManualOrders, listSupabaseOrders, listSupabaseUsers } from '@/modules/supabase/commerce-store'
 
 export default async function AdminDashboardPage() {
-  await connectDb()
+  const { products, orders, pendingDeposits, users, manualPending } = isSupabaseProvider()
+    ? await Promise.all([
+        listSupabaseProducts().then((rows: any[]) => rows.length),
+        listSupabaseOrders().then((rows: any[]) => rows.length),
+        listSupabaseDeposits().then((rows: any[]) => rows.filter((row: any) => row.status === 'pending').length),
+        listSupabaseUsers().then((rows: any[]) => rows.length),
+        listSupabaseManualOrders().then((rows: any[]) => rows.filter((row: any) => ['pending', 'processing'].includes(row.status)).length),
+      ]).then(([products, orders, pendingDeposits, users, manualPending]) => ({
+        products,
+        orders,
+        pendingDeposits,
+        users,
+        manualPending,
+      }))
+    : isMongoEnabled()
+      ? await import('@/modules/db/connection')
+          .then(async ({ connectDb }) => {
+            await connectDb()
+            const { ManualOrderModel, OrderModel, ProductModel, UserModel, WalletDepositRequestModel } = await import('@/domain/models')
+            const [products, orders, pendingDeposits, users, manualPending] = await Promise.all([
+              ProductModel.countDocuments({}),
+              OrderModel.countDocuments({}),
+              WalletDepositRequestModel.countDocuments({ status: 'pending' }),
+              UserModel.countDocuments({}),
+              ManualOrderModel.countDocuments({ status: { $in: ['pending', 'processing'] } }),
+            ])
 
-  const [products, orders, pendingDeposits, users, manualPending] = await Promise.all([
-    ProductModel.countDocuments({}),
-    OrderModel.countDocuments({}),
-    WalletDepositRequestModel.countDocuments({ status: 'pending' }),
-    UserModel.countDocuments({}),
-    ManualOrderModel.countDocuments({ status: { $in: ['pending', 'processing'] } }),
-  ])
+            return { products, orders, pendingDeposits, users, manualPending }
+          })
+      : { products: 0, orders: 0, pendingDeposits: 0, users: 0, manualPending: 0 }
 
   const quickLinks = [
     {
@@ -24,7 +46,7 @@ export default async function AdminDashboardPage() {
     {
       label: 'إدارة المنتجات',
       href: '/admin/products',
-      description: 'إضافة المنتجات، تعديلها، وربطها بالتسعير والمزودين.',
+      description: 'إضافة المنتجات، تعديلها، وربطها بالتسعير والمزوّدين.',
     },
     {
       label: 'الطلبات',

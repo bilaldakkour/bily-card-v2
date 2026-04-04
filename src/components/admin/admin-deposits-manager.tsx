@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { fromMinor } from '@/core/money'
 import { AdminPageShell } from '@/components/admin/admin-page-shell'
 import { Button } from '@/components/ui/button'
@@ -16,6 +17,7 @@ type DepositRow = {
 }
 
 export function AdminDepositsManager({ initial }: { initial: DepositRow[] }) {
+  const router = useRouter()
   const [items, setItems] = useState(initial)
   const [status, setStatus] = useState('pending')
   const [message, setMessage] = useState('')
@@ -35,6 +37,7 @@ export function AdminDepositsManager({ initial }: { initial: DepositRow[] }) {
     }
     setMessage('تمت الموافقة على الإيداع')
     await refresh()
+    router.refresh()
   }
 
   async function reject(id: string) {
@@ -52,6 +55,7 @@ export function AdminDepositsManager({ initial }: { initial: DepositRow[] }) {
 
     setMessage('تم رفض الإيداع')
     await refresh()
+    router.refresh()
   }
 
   return (

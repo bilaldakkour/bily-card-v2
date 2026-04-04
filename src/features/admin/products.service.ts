@@ -1,9 +1,25 @@
-﻿import { z } from 'zod'
+import { mkdir, unlink, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { z } from 'zod'
 import { connectDb } from '@/modules/db/connection'
 import { ApiError } from '@/core/http'
 import { clearCatalogCache, getCatalogDetailBySlug } from '@/modules/catalog/service'
+import { createDatabaseUnavailableError, isMongoEnabled, isSupabaseProvider } from '@/modules/db/provider'
 import { normalizePercent } from '@/core/percent'
 import { ProductModel, ProductPricingRuleModel, ProductProviderLinkModel } from '@/domain/models'
+import {
+  deleteSupabaseProductById,
+  getSupabaseProductById,
+  listSupabasePricingRules,
+  listSupabaseProducts,
+  listSupabaseProviderLinks,
+  normalizeSupabaseCountConfig,
+  replaceSupabaseProviderLinks,
+  saveSupabasePricingRule,
+  saveSupabaseProduct,
+} from '@/modules/supabase/catalog-store'
+import { deleteDocument, getDocumentBySlug, isSupabaseNotReadyError } from '@/modules/supabase/documents'
 
 const packageSchema = z.object({
   key: z.string().min(1),
@@ -69,6 +85,54 @@ const coreProductSchema = z.object({
     .default({}),
 })
 
+function normalizeProductThumbnail(value: unknown) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+
+  const prefixedMatch = raw.match(/^image:\s*["']?(.+?)["']?$/i)
+  const normalized = (prefixedMatch?.[1] ?? raw).replace(/^["']|["']$/g, '').trim()
+  if (!normalized || normalized === 'null' || normalized === 'undefined') return null
+
+  if (
+    normalized.startsWith('/') ||
+    normalized.startsWith('http://') ||
+    normalized.startsWith('https://') ||
+    normalized.startsWith('data:')
+  ) {
+    return normalized
+  }
+
+  return normalized.startsWith('images/') ? `/${normalized}` : normalized
+}
+
+function isManagedProductUpload(imageUrl: string | null | undefined) {
+  return String(imageUrl ?? '').startsWith('/uploads/products/')
+}
+
+async function deleteManagedProductUpload(imageUrl: string | null | undefined) {
+  if (!isManagedProductUpload(imageUrl)) return
+
+  const filePath = path.join(process.cwd(), 'public', String(imageUrl).replace(/^\/+/, ''))
+  await unlink(filePath).catch(() => null)
+}
+
+export async function saveProductUpload(file: File) {
+  if (!file.type.startsWith('image/')) {
+    throw new ApiError(400, 'INVALID_PRODUCT_IMAGE', 'Product image must be an image file')
+  }
+
+  const bytes = Buffer.from(await file.arrayBuffer())
+  const extension = path.extname(file.name) || '.png'
+  const fileName = `${Date.now()}-${randomUUID()}${extension}`
+  const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'products')
+  const uploadPath = path.join(uploadDir, fileName)
+
+  await mkdir(uploadDir, { recursive: true })
+  await writeFile(uploadPath, bytes)
+
+  return `/uploads/products/${fileName}`
+}
+
 function normalizeCountConfig(countConfig: {
   min?: number | null
   max?: number | null
@@ -91,6 +155,62 @@ function normalizeCountConfig(countConfig: {
 }
 
 export async function listAdminProducts() {
+  if (isSupabaseProvider()) {
+    let products: any[] = []
+    let pricingRules: any[] = []
+    let providerLinks: any[] = []
+
+    try {
+      ;[products, pricingRules, providerLinks] = await Promise.all([
+        listSupabaseProducts(),
+        listSupabasePricingRules(),
+        listSupabaseProviderLinks(),
+      ])
+    } catch (error) {
+      if (isSupabaseNotReadyError(error)) return []
+      throw error
+    }
+
+    const pricingByProduct = new Map(pricingRules.map((r) => [String(r.productId), r]))
+    const linksByProduct = new Map<string, any[]>()
+    for (const link of providerLinks) {
+      const key = String(link.productId)
+      const arr = linksByProduct.get(key) ?? []
+      arr.push(link)
+      linksByProduct.set(key, arr)
+    }
+
+    function normalizeOverrideMap(input: unknown) {
+      if (!input) return {}
+      if (input instanceof Map) {
+        return Object.fromEntries(Array.from(input.entries()).map(([key, value]) => [key, normalizePercent(Number(value))]))
+      }
+      if (typeof input === 'object') {
+        return Object.fromEntries(
+          Object.entries(input as Record<string, number>).map(([key, value]) => [key, normalizePercent(Number(value))])
+        )
+      }
+      return {}
+    }
+
+    return products.map((product) => ({
+      ...product,
+      countConfig: normalizeSupabaseCountConfig((product as any).countConfig),
+      pricingRule: pricingByProduct.get(String(product._id))
+        ? {
+            ...pricingByProduct.get(String(product._id)),
+            defaultMarginPct: normalizePercent(pricingByProduct.get(String(product._id))?.defaultMarginPct ?? 15),
+            countMarginPct: normalizePercent(pricingByProduct.get(String(product._id))?.countMarginPct ?? 15),
+            customerDiscountPct: normalizePercent(pricingByProduct.get(String(product._id))?.customerDiscountPct ?? 0),
+            packageMarginOverrides: normalizeOverrideMap(pricingByProduct.get(String(product._id))?.packageMarginOverrides),
+          }
+        : null,
+      providerLinks: linksByProduct.get(String(product._id)) ?? [],
+    }))
+  }
+
+  if (!isMongoEnabled()) return []
+
   await connectDb()
 
   const products = await ProductModel.find({})
@@ -159,15 +279,56 @@ export async function listAdminProducts() {
 }
 
 export async function createAdminProduct(input: z.input<typeof coreProductSchema>) {
+  if (isSupabaseProvider()) {
+    const parsed = coreProductSchema.parse(input)
+    const normalizedParsed = {
+      ...parsed,
+      thumbnail: normalizeProductThumbnail(parsed.thumbnail),
+    }
+
+    const exists = await getDocumentBySlug('products', normalizedParsed.slug)
+    if (exists) throw new ApiError(409, 'SLUG_EXISTS', 'Slug already exists')
+
+    const product = await saveSupabaseProduct({
+      slug: normalizedParsed.slug,
+      visible: normalizedParsed.visible,
+      active: normalizedParsed.active,
+      payload: {
+        ...normalizedParsed,
+        countConfig: normalizeCountConfig(normalizedParsed.countConfig),
+        packages: [],
+      },
+    })
+
+    await saveSupabasePricingRule(String(product._id), {
+      defaultMarginPct: 15,
+      countMarginPct: 15,
+      roundingMode: 'nearest_0_01',
+      isDiscountEnabled: false,
+      customerDiscountPct: 0,
+      packageMarginOverrides: {},
+    })
+
+    clearCatalogCache()
+
+    return { id: String(product._id) }
+  }
+
+  if (!isMongoEnabled()) throw createDatabaseUnavailableError('Admin product management')
+
   await connectDb()
   const parsed = coreProductSchema.parse(input)
+  const normalizedParsed = {
+    ...parsed,
+    thumbnail: normalizeProductThumbnail(parsed.thumbnail),
+  }
 
-  const exists = await ProductModel.findOne({ slug: parsed.slug }).select({ _id: 1 }).lean()
+  const exists = await ProductModel.findOne({ slug: normalizedParsed.slug }).select({ _id: 1 }).lean()
   if (exists) throw new ApiError(409, 'SLUG_EXISTS', 'Slug already exists')
 
   const product = await ProductModel.create({
-    ...parsed,
-    countConfig: normalizeCountConfig(parsed.countConfig),
+    ...normalizedParsed,
+    countConfig: normalizeCountConfig(normalizedParsed.countConfig),
     packages: [],
   })
 
@@ -187,17 +348,63 @@ export async function createAdminProduct(input: z.input<typeof coreProductSchema
 }
 
 export async function updateAdminProduct(productId: string, input: z.input<typeof coreProductSchema>) {
+  if (isSupabaseProvider()) {
+    const parsed = coreProductSchema.parse(input)
+    const normalizedParsed = {
+      ...parsed,
+      thumbnail: normalizeProductThumbnail(parsed.thumbnail),
+    }
+
+    const existing = await getSupabaseProductById(productId)
+    if (!existing) throw new ApiError(404, 'PRODUCT_NOT_FOUND', 'Product not found')
+    const previousThumbnail = existing.thumbnail ?? null
+
+    const duplicate = await getDocumentBySlug('products', normalizedParsed.slug)
+    if (duplicate && duplicate.id !== productId) throw new ApiError(409, 'SLUG_EXISTS', 'Slug already exists')
+
+    const product = await saveSupabaseProduct({
+      id: productId,
+      slug: normalizedParsed.slug,
+      visible: normalizedParsed.visible,
+      active: normalizedParsed.active,
+      payload: {
+        ...existing,
+        ...normalizedParsed,
+        countConfig: normalizeCountConfig(normalizedParsed.countConfig),
+      },
+    })
+
+    if (previousThumbnail !== product.thumbnail) {
+      await deleteManagedProductUpload(previousThumbnail)
+    }
+
+    clearCatalogCache()
+
+    return { id: String(product._id) }
+  }
+
+  if (!isMongoEnabled()) throw createDatabaseUnavailableError('Admin product management')
+
   await connectDb()
   const parsed = coreProductSchema.parse(input)
+  const normalizedParsed = {
+    ...parsed,
+    thumbnail: normalizeProductThumbnail(parsed.thumbnail),
+  }
 
   const product = await ProductModel.findById(productId)
   if (!product) throw new ApiError(404, 'PRODUCT_NOT_FOUND', 'Product not found')
+  const previousThumbnail = product.thumbnail ?? null
 
   Object.assign(product, {
-    ...parsed,
-    countConfig: normalizeCountConfig(parsed.countConfig),
+    ...normalizedParsed,
+    countConfig: normalizeCountConfig(normalizedParsed.countConfig),
   })
   await product.save()
+
+  if (previousThumbnail !== product.thumbnail) {
+    await deleteManagedProductUpload(previousThumbnail)
+  }
 
   clearCatalogCache()
 
@@ -205,6 +412,41 @@ export async function updateAdminProduct(productId: string, input: z.input<typeo
 }
 
 export async function replaceProductPackages(productId: string, input: unknown) {
+  if (isSupabaseProvider()) {
+    const product = await getSupabaseProductById(productId)
+    if (!product) throw new ApiError(404, 'PRODUCT_NOT_FOUND', 'Product not found')
+
+    const parsedPackages = z.array(adminPackageSchema).parse(input)
+    const existingPackages = Array.isArray(product.packages) ? product.packages : []
+    const packages = parsedPackages.map((pkg, index) => ({
+      key: existingPackages[index]?.key ?? `pkg-${index + 1}`,
+      label: pkg.label,
+      sortOrder: index + 1,
+      countValue: null,
+      visible: pkg.visible,
+      active: pkg.active,
+      manualPriceMinor: Math.round(Number(pkg.price) * 100),
+      manualStock: null,
+    }))
+
+    const saved = await saveSupabaseProduct({
+      id: productId,
+      slug: product.slug,
+      visible: product.visible,
+      active: product.active,
+      payload: {
+        ...product,
+        packages: z.array(packageSchema).parse(packages),
+      },
+    })
+
+    clearCatalogCache()
+
+    return { id: String(saved._id), packagesCount: packages.length }
+  }
+
+  if (!isMongoEnabled()) throw createDatabaseUnavailableError('Admin product management')
+
   await connectDb()
 
   const product = await ProductModel.findById(productId)
@@ -232,6 +474,34 @@ export async function replaceProductPackages(productId: string, input: unknown) 
 }
 
 export async function replaceProductProviderLinks(productId: string, input: unknown) {
+  if (isSupabaseProvider()) {
+    const product = await getSupabaseProductById(productId)
+    if (!product) throw new ApiError(404, 'PRODUCT_NOT_FOUND', 'Product not found')
+
+    const links = z.array(providerLinkSchema).parse(input)
+
+    await replaceSupabaseProviderLinks(
+      productId,
+      links.map((link) => ({
+        packageKey: link.packageKey ?? null,
+        provider: link.provider,
+        providerProductId: link.providerProductId,
+        providerVariantId: link.providerVariantId ?? null,
+        isPrimary: link.isPrimary,
+        active: link.enabled ?? link.active ?? true,
+        enabled: link.enabled,
+        priority: link.priority ?? 100,
+        forceProvider: link.forceProvider ?? false,
+      }))
+    )
+
+    clearCatalogCache()
+
+    return { id: productId, linksCount: links.length }
+  }
+
+  if (!isMongoEnabled()) throw createDatabaseUnavailableError('Admin product management')
+
   await connectDb()
 
   const product = await ProductModel.findById(productId).select({ _id: 1 }).lean()
@@ -262,6 +532,31 @@ export async function replaceProductProviderLinks(productId: string, input: unkn
 }
 
 export async function updateProductPricingRule(productId: string, input: unknown) {
+  if (isSupabaseProvider()) {
+    const product = await getSupabaseProductById(productId)
+    if (!product) throw new ApiError(404, 'PRODUCT_NOT_FOUND', 'Product not found')
+
+    const parsed = pricingSchema.parse(input)
+    const normalizedPackageMargins = Object.fromEntries(
+      Object.entries(parsed.packageMarginOverrides).map(([key, value]) => [key, normalizePercent(value)])
+    )
+
+    await saveSupabasePricingRule(productId, {
+      defaultMarginPct: normalizePercent(parsed.defaultMarginPct),
+      countMarginPct: normalizePercent(parsed.countMarginPct),
+      roundingMode: parsed.roundingMode,
+      isDiscountEnabled: parsed.isDiscountEnabled,
+      customerDiscountPct: normalizePercent(parsed.customerDiscountPct),
+      packageMarginOverrides: normalizedPackageMargins,
+    })
+
+    clearCatalogCache()
+
+    return { id: productId }
+  }
+
+  if (!isMongoEnabled()) throw createDatabaseUnavailableError('Admin product management')
+
   await connectDb()
 
   const product = await ProductModel.findById(productId).select({ _id: 1 }).lean()
@@ -291,7 +586,28 @@ export async function updateProductPricingRule(productId: string, input: unknown
 }
 
 export async function deleteAdminProduct(productId: string) {
+  if (isSupabaseProvider()) {
+    const product = await getSupabaseProductById(productId)
+    if (!product) return { id: productId }
+
+    await deleteSupabaseProductById(productId)
+    await replaceSupabaseProviderLinks(productId, [])
+    const rule = await getDocumentBySlug('product_pricing_rules', productId)
+    if (rule) {
+      await deleteDocument('product_pricing_rules', rule.id)
+    }
+
+    await deleteManagedProductUpload(product.thumbnail)
+
+    clearCatalogCache()
+    return { id: productId }
+  }
+
+  if (!isMongoEnabled()) throw createDatabaseUnavailableError('Admin product management')
+
   await connectDb()
+
+  const product = await ProductModel.findById(productId).select({ thumbnail: 1 }).lean()
 
   await Promise.all([
     ProductModel.findByIdAndDelete(productId),
@@ -299,18 +615,34 @@ export async function deleteAdminProduct(productId: string) {
     ProductProviderLinkModel.deleteMany({ productId }),
   ])
 
+  await deleteManagedProductUpload((product as any)?.thumbnail ?? null)
+
   clearCatalogCache()
 
   return { id: productId }
 }
 
 export async function getAdminProductPreview(productId: string) {
-  await connectDb()
+  if (!isMongoEnabled() && !isSupabaseProvider()) {
+    return { detail: null }
+  }
 
-  const product = (await ProductModel.findById(productId).select({ slug: 1, kind: 1 }).lean()) as any
+  let product: any
+  try {
+    product = isSupabaseProvider()
+      ? await getSupabaseProductById(productId)
+      : ((await (async () => {
+          await connectDb()
+          return ProductModel.findById(productId).select({ slug: 1, kind: 1 }).lean()
+        })()) as any)
+  } catch (error) {
+    if (isSupabaseProvider() && isSupabaseNotReadyError(error)) {
+      return { detail: null }
+    }
+    throw error
+  }
   if (!product) throw new ApiError(404, 'PRODUCT_NOT_FOUND', 'Product not found')
 
   const detail = await getCatalogDetailBySlug(product.slug)
   return { detail }
 }
-

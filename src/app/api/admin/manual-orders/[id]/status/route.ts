@@ -1,4 +1,5 @@
-﻿import { z } from 'zod'
+import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 import { fail, ok } from '@/core/http'
 import { requireAdmin } from '@/modules/security/guards'
 import { updateManualOrderStatusByAdmin } from '@/features/orders/service'
@@ -20,6 +21,9 @@ export async function PATCH(request: Request, ctx: { params: { id: string } }) {
       note: body.note,
     })
 
+    for (const path of ['/admin', '/admin/orders', '/admin/manual-orders', '/admin/reports']) {
+      revalidatePath(path)
+    }
     return ok(data)
   } catch (error) {
     return fail(error)

@@ -10,7 +10,16 @@ import { calculateCountTotal, calculateFinalPrice } from '@/modules/pricing/engi
 import { normalizePercent } from '@/core/percent'
 import { resolveStock } from '@/modules/stock/engine'
 import { ensureProviderCatalogFresh } from '@/modules/providers/catalog-sync'
+import { createDatabaseUnavailableError, isMongoEnabled, isSupabaseProvider } from '@/modules/db/provider'
 import type { CatalogDetail, CatalogListItem, DisplayPackage } from '@/domain/types/catalog'
+import {
+  getSupabaseProductBySlug,
+  listSupabasePricingRules,
+  listSupabaseProducts,
+  listSupabaseProviderCatalogCaches,
+  listSupabaseProviderLinks,
+} from '@/modules/supabase/catalog-store'
+import { isSupabaseNotReadyError, isSupabaseUnavailableError } from '@/modules/supabase/documents'
 
 type ProviderCostMap = Map<
   string,
@@ -30,11 +39,60 @@ type ProviderLinkOption = {
 const listCache = new InMemoryTTLCache<CatalogListItem[]>()
 const detailCache = new InMemoryTTLCache<CatalogDetail>()
 
+function normalizeCatalogImage(value: unknown) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+
+  const prefixedMatch = raw.match(/^image:\s*["']?(.+?)["']?$/i)
+  const normalized = (prefixedMatch?.[1] ?? raw).replace(/^["']|["']$/g, '').trim()
+  if (!normalized || normalized === 'null' || normalized === 'undefined') return null
+
+  if (
+    normalized.startsWith('/') ||
+    normalized.startsWith('http://') ||
+    normalized.startsWith('https://') ||
+    normalized.startsWith('data:')
+  ) {
+    return normalized
+  }
+
+  return normalized.startsWith('images/') ? `/${normalized}` : normalized
+}
+
 function linkKey(provider: string, productId: string, variantId: string | null) {
   return `${provider}:${productId}:${variantId ?? ''}`
 }
 
 async function getProviderCostMap() {
+  if (isSupabaseProvider()) {
+    const rows = await listSupabaseProviderCatalogCaches()
+    const map: ProviderCostMap = new Map()
+    for (const row of rows) {
+      const products = Array.isArray(row.products) ? row.products : []
+      for (const product of products as Array<{
+        productId: string
+        variantId?: string
+        cost: number
+        available: boolean
+        min?: number | null
+        max?: number | null
+        step?: number | null
+      }>) {
+        map.set(linkKey(row.provider, product.productId, product.variantId ?? null), {
+          cost: product.cost,
+          available: product.available,
+          min: product.min ?? null,
+          max: product.max ?? null,
+          step: product.step ?? null,
+        })
+      }
+    }
+
+    return map
+  }
+
+  if (!isMongoEnabled()) return new Map()
+
   await ensureProviderCatalogFresh('daily_card')
   const rows = await ProviderCatalogCacheModel.find({ expiresAt: { $gt: new Date() } })
     .select({ provider: 1, products: 1 })
@@ -192,43 +250,73 @@ export function clearCatalogCache() {
   detailCache.clear()
 }
 
-export async function getCatalogList() {
-  const cached = listCache.get('catalog:list')
-  if (cached) return cached
+export async function getCatalogList(options?: { fresh?: boolean }) {
+  if (!isMongoEnabled() && !isSupabaseProvider()) return []
 
-  return dedupeRequest('catalog:list', async () => {
-    await connectDb()
+  const useFreshData = options?.fresh === true
 
-    const products = (await ProductModel.find({ visible: true, active: true, hiddenFromCustomer: { $ne: true } })
-      .select({
-        slug: 1,
-        name: 1,
-        description: 1,
-        thumbnail: 1,
-        kind: 1,
-        category: 1,
-        forceOutOfStock: 1,
-        packages: 1,
-        manualStock: 1,
-        countConfig: 1,
-        routingMode: 1,
-        bestsellerRank: 1,
-      })
-      .sort({ bestsellerRank: 1, createdAt: -1 })
-      .lean()) as any[]
+  if (!useFreshData) {
+    const cached = listCache.get('catalog:list')
+    if (cached) return cached
+  }
 
+  return dedupeRequest(useFreshData ? 'catalog:list:fresh' : 'catalog:list', async () => {
+    let productsRaw: any[] = []
+    let rules: any[] = []
+    let links: any[] = []
+    let providerCostMap: ProviderCostMap = new Map()
+
+    try {
+      ;[productsRaw, rules, links, providerCostMap] = await Promise.all(
+        isSupabaseProvider()
+          ? [
+              listSupabaseProducts(),
+              listSupabasePricingRules(),
+              listSupabaseProviderLinks(),
+              getProviderCostMap(),
+            ]
+          : [
+              (async () => {
+                await connectDb()
+                return (await ProductModel.find({ visible: true, active: true, hiddenFromCustomer: { $ne: true } })
+                  .select({
+                    slug: 1,
+                    name: 1,
+                    description: 1,
+                    thumbnail: 1,
+                    kind: 1,
+                    category: 1,
+                    forceOutOfStock: 1,
+                    packages: 1,
+                    manualStock: 1,
+                    countConfig: 1,
+                    routingMode: 1,
+                    bestsellerRank: 1,
+                  })
+                  .sort({ bestsellerRank: 1, createdAt: -1 })
+                  .lean()) as any[]
+              })(),
+              (async () => ProductPricingRuleModel.find({}).lean() as Promise<any[]>)(),
+              (async () => ProductProviderLinkModel.find({ active: true }).lean() as Promise<any[]>)(),
+              getProviderCostMap(),
+            ]
+      )
+    } catch (error) {
+      if (isSupabaseProvider() && (isSupabaseNotReadyError(error) || isSupabaseUnavailableError(error))) {
+        return []
+      }
+      throw error
+    }
+
+    const products = (productsRaw as any[]).filter((product) => product.visible && product.active && product.hiddenFromCustomer !== true)
     const productIds = products.map((p) => p._id)
+    const scopedRules = (rules as any[]).filter((rule) => productIds.includes(rule.productId))
+    const scopedLinks = (links as any[]).filter((link) => productIds.includes(link.productId) && (link.active ?? true))
 
-    const [rules, links, providerCostMap] = await Promise.all([
-      ProductPricingRuleModel.find({ productId: { $in: productIds } }).lean() as Promise<any[]>,
-      ProductProviderLinkModel.find({ productId: { $in: productIds }, active: true }).lean() as Promise<any[]>,
-      getProviderCostMap(),
-    ])
-
-    const rulesByProduct = new Map(rules.map((r) => [String(r.productId), r]))
+    const rulesByProduct = new Map(scopedRules.map((r) => [String(r.productId), r]))
     const linksByProduct = new Map<string, typeof links>()
 
-    for (const link of links) {
+    for (const link of scopedLinks) {
       const key = String(link.productId)
       const existing = linksByProduct.get(key)
       if (existing) existing.push(link)
@@ -308,7 +396,7 @@ export async function getCatalogList() {
         slug: product.slug,
         name: product.name,
         description: product.description ?? '',
-        thumbnail: product.thumbnail,
+        thumbnail: normalizeCatalogImage(product.thumbnail),
         kind: product.kind,
         finalPriceFrom,
         available,
@@ -316,44 +404,68 @@ export async function getCatalogList() {
       }
     })
 
-    listCache.set('catalog:list', items, 30_000)
+    if (!useFreshData) {
+      listCache.set('catalog:list', items, 30_000)
+    }
+
     return items
   })
 }
 
 export async function getCatalogDetailBySlug(slug: string) {
+  if (!isMongoEnabled() && !isSupabaseProvider()) return null
+
   const cacheKey = `catalog:detail:${slug}`
   const cached = detailCache.get(cacheKey)
   if (cached) return cached
 
   return dedupeRequest(cacheKey, async () => {
-    await connectDb()
+    let product: any
+    try {
+      product = isSupabaseProvider()
+        ? await getSupabaseProductBySlug(slug)
+        : ((await (async () => {
+            await connectDb()
+            return ProductModel.findOne({ slug, visible: true, hiddenFromCustomer: { $ne: true } })
+              .select({
+                slug: 1,
+                name: 1,
+                description: 1,
+                thumbnail: 1,
+                kind: 1,
+                category: 1,
+                forceOutOfStock: 1,
+                manualStock: 1,
+                packages: 1,
+                countConfig: 1,
+                routingMode: 1,
+                active: 1,
+                visible: 1,
+              })
+              .lean()
+          })()) as any)
+    } catch (error) {
+      if (isSupabaseProvider() && (isSupabaseNotReadyError(error) || isSupabaseUnavailableError(error))) return null
+      throw error
+    }
 
-    const product = (await ProductModel.findOne({ slug, visible: true, hiddenFromCustomer: { $ne: true } })
-      .select({
-        slug: 1,
-        name: 1,
-        description: 1,
-        thumbnail: 1,
-        kind: 1,
-        category: 1,
-        forceOutOfStock: 1,
-        manualStock: 1,
-        packages: 1,
-        countConfig: 1,
-        routingMode: 1,
-        active: 1,
-        visible: 1,
-      })
-      .lean()) as any
+    if (!product || product.hiddenFromCustomer === true || product.visible === false) return null
 
-    if (!product) return null
-
-    const [rule, links, providerCostMap] = await Promise.all([
-      ProductPricingRuleModel.findOne({ productId: product._id }).lean() as Promise<any>,
-      ProductProviderLinkModel.find({ productId: product._id, active: true }).lean() as Promise<any[]>,
-      getProviderCostMap(),
-    ])
+    const [rule, links, providerCostMap] = await Promise.all(
+      isSupabaseProvider()
+        ? [
+            listSupabasePricingRules().then((rows: any[]) => rows.find((row: any) => String(row.productId) === String(product._id)) ?? null),
+            listSupabaseProviderLinks().then((rows: any[]) =>
+              rows.filter((row: any) => String(row.productId) === String(product._id) && (row.active ?? true))
+            ),
+            getProviderCostMap(),
+          ]
+        : [
+            ProductPricingRuleModel.findOne({ productId: product._id }).lean() as Promise<any>,
+            ProductProviderLinkModel.find({ productId: product._id, active: true }).lean() as Promise<any[]>,
+            getProviderCostMap(),
+          ]
+    )
 
     const marginPercent = normalizePercent(rule?.defaultMarginPct ?? 15)
     const roundingMode = rule?.roundingMode ?? 'nearest_0_01'
@@ -458,7 +570,7 @@ export async function getCatalogDetailBySlug(slug: string) {
       slug: product.slug,
       name: product.name,
       description: product.description,
-      thumbnail: product.thumbnail ?? null,
+      thumbnail: normalizeCatalogImage(product.thumbnail),
       kind: product.kind,
       available: finalAvailable,
       category: product.category,
@@ -472,26 +584,49 @@ export async function getCatalogDetailBySlug(slug: string) {
 }
 
 export async function getOrderPricingSnapshot(input: { productSlug: string; packageKey?: string; countValue?: number }) {
-  await connectDb()
+  if (!isMongoEnabled() && !isSupabaseProvider()) throw createDatabaseUnavailableError('Order pricing')
 
-  const product = (await ProductModel.findOne({ slug: input.productSlug, active: true, visible: true })
-    .select({
-      _id: 1,
-      slug: 1,
-      kind: 1,
-      routingMode: 1,
-      packages: 1,
-      countConfig: 1,
-    })
-    .lean()) as any
+  let product: any
+  try {
+    product = isSupabaseProvider()
+      ? await getSupabaseProductBySlug(input.productSlug)
+      : ((await (async () => {
+          await connectDb()
+          return ProductModel.findOne({ slug: input.productSlug, active: true, visible: true })
+            .select({
+              _id: 1,
+              slug: 1,
+              kind: 1,
+              routingMode: 1,
+              packages: 1,
+              countConfig: 1,
+            })
+            .lean()
+        })()) as any)
+  } catch (error) {
+    if (isSupabaseProvider() && (isSupabaseNotReadyError(error) || isSupabaseUnavailableError(error))) {
+      throw createDatabaseUnavailableError('Order pricing')
+    }
+    throw error
+  }
 
   if (!product) return null
 
-  const [rule, links, providerCostMap] = await Promise.all([
-    ProductPricingRuleModel.findOne({ productId: product._id }).lean() as Promise<any>,
-    ProductProviderLinkModel.find({ productId: product._id, active: true }).lean() as Promise<any[]>,
-    getProviderCostMap(),
-  ])
+  const [rule, links, providerCostMap] = await Promise.all(
+    isSupabaseProvider()
+      ? [
+          listSupabasePricingRules().then((rows: any[]) => rows.find((row: any) => String(row.productId) === String(product._id)) ?? null),
+          listSupabaseProviderLinks().then((rows: any[]) =>
+            rows.filter((row: any) => String(row.productId) === String(product._id) && (row.active ?? true))
+          ),
+          getProviderCostMap(),
+        ]
+      : [
+          ProductPricingRuleModel.findOne({ productId: product._id }).lean() as Promise<any>,
+          ProductProviderLinkModel.find({ productId: product._id, active: true }).lean() as Promise<any[]>,
+          getProviderCostMap(),
+        ]
+  )
 
   const marginPercent = normalizePercent(rule?.defaultMarginPct ?? 15)
   const roundingMode = rule?.roundingMode ?? 'nearest_0_01'

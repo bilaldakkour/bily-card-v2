@@ -73,6 +73,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
   const [selectedId, setSelectedId] = useState(initialProducts[0]?._id ?? '')
   const [status, setStatus] = useState('')
   const [preview, setPreview] = useState<any>(null)
+  const [pendingImage, setPendingImage] = useState<File | null>(null)
 
   const selected = useMemo(() => products.find((p) => p._id === selectedId) ?? null, [products, selectedId])
 
@@ -81,6 +82,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
     const json = await res.json()
     const normalized = (json.data ?? []).map(normalizeProductForForm)
     setProducts(normalized)
+    setPendingImage(null)
     if (!selectedId && normalized[0]?._id) setSelectedId(normalized[0]._id)
   }
 
@@ -145,6 +147,67 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
     }
 
     setStatus('تم حفظ بيانات المنتج')
+    await refresh()
+  }
+
+  async function saveCoreWithUpload() {
+    if (!selected) return
+
+    if (!pendingImage) {
+      await saveCore()
+      return
+    }
+
+    const payload = {
+      slug: selected.slug,
+      name: selected.name,
+      description: selected.description ?? '',
+      thumbnail: selected.thumbnail ?? null,
+      category: selected.category,
+      kind: selected.kind,
+      visible: selected.visible,
+      hiddenFromCustomer: selected.hiddenFromCustomer ?? false,
+      active: selected.active,
+      forceOutOfStock: selected.forceOutOfStock ?? false,
+      manualStock: selected.manualStock,
+      routingMode: selected.routingMode,
+      countConfig: normalizeCountConfigForForm(selected.countConfig),
+    }
+
+    const body = new FormData()
+    body.set('slug', payload.slug)
+    body.set('name', payload.name)
+    body.set('description', payload.description)
+    body.set('thumbnail', payload.thumbnail ?? '')
+    body.set('category', payload.category)
+    body.set('kind', payload.kind)
+    body.set('visible', String(payload.visible))
+    body.set('hiddenFromCustomer', String(payload.hiddenFromCustomer))
+    body.set('active', String(payload.active))
+    body.set('forceOutOfStock', String(payload.forceOutOfStock))
+    body.set('manualStock', payload.manualStock === null ? '' : String(payload.manualStock))
+    body.set('routingMode', payload.routingMode)
+    body.set('countMin', payload.countConfig.min === null ? '' : String(payload.countConfig.min))
+    body.set('countMax', payload.countConfig.max === null ? '' : String(payload.countConfig.max))
+    body.set('countStep', payload.countConfig.step === null ? '' : String(payload.countConfig.step))
+    body.set(
+      'countManualUnitPrice',
+      payload.countConfig.manualUnitPrice === null ? '' : String(payload.countConfig.manualUnitPrice)
+    )
+    body.set('image', pendingImage)
+
+    const res = await fetch(`/api/admin/products/${selected._id}`, {
+      method: 'PATCH',
+      body,
+    })
+
+    if (!res.ok) {
+      setStatus('ظپط´ظ„ ط­ظپط¸ طµظˆط±ط© ط§ظ„ظ…ظ†طھط¬')
+      return
+    }
+
+    setStatus('طھظ… ط­ظپط¸ ط¨ظٹط§ظ†ط§طھ ط§ظ„ظ…ظ†طھط¬')
+    setPendingImage(null)
     await refresh()
   }
 
@@ -279,6 +342,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                 onClick={() => {
                   setSelectedId(product._id)
                   setPreview(null)
+                  setPendingImage(null)
                 }}
                 className={`w-full rounded-2xl border p-3 text-right transition ${
                   selectedId === product._id
@@ -345,6 +409,39 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
               />
             </div>
 
+            <div className='grid gap-3 lg:grid-cols-[1fr_220px]'>
+              <label className='space-y-2 rounded-2xl border border-cyan-400/15 bg-white/[0.02] p-3 text-sm text-slate-200'>
+                <span className='block text-xs text-slate-400'>Upload Product Image</span>
+                <input
+                  type='file'
+                  accept='image/*'
+                  onChange={(e) => setPendingImage(e.target.files?.[0] ?? null)}
+                  className='block w-full text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-cyan-400/20 file:px-3 file:py-2 file:text-cyan-100'
+                />
+                <span className='block text-xs text-slate-500'>
+                  {pendingImage ? pendingImage.name : 'The file will be saved into public/uploads/products.'}
+                </span>
+              </label>
+
+              <div className='flex min-h-[140px] items-center justify-center overflow-hidden rounded-2xl border border-cyan-400/15 bg-white/[0.02] p-3'>
+                {pendingImage ? (
+                  <img
+                    src={URL.createObjectURL(pendingImage)}
+                    alt='Pending product upload'
+                    className='h-full max-h-[132px] w-full rounded-xl object-cover'
+                  />
+                ) : selected.thumbnail ? (
+                  <img
+                    src={selected.thumbnail}
+                    alt={selected.name}
+                    className='h-full max-h-[132px] w-full rounded-xl object-cover'
+                  />
+                ) : (
+                  <span className='text-xs text-slate-500'>No image selected</span>
+                )}
+              </div>
+            </div>
+
             {selected.kind === 'count' ? (
               <div className='grid gap-2 sm:grid-cols-2'>
                 <Input
@@ -402,7 +499,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
               </label>
             </div>
 
-            <Button onClick={saveCore}>Save Core</Button>
+            <Button onClick={saveCoreWithUpload}>Save Core</Button>
           </SectionCard>
 
           <SectionCard

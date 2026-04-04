@@ -1,7 +1,7 @@
-﻿import { z } from 'zod'
+import { z } from 'zod'
 import { fail, ok } from '@/core/http'
+import { createLoginChallengeForUser } from '@/features/auth/login-challenge.service'
 import { registerCustomer } from '@/features/auth/service'
-import { createSession, setSessionCookie } from '@/modules/security/session'
 
 const schema = z.object({
   name: z.string().min(2),
@@ -15,16 +15,13 @@ export async function POST(request: Request) {
     const input = schema.parse(json)
 
     const user = await registerCustomer(input)
-    const token = await createSession({
-      sub: user.id,
+    const challenge = await createLoginChallengeForUser({
+      id: user.id,
       email: user.email,
-      role: user.role,
     })
 
-    await setSessionCookie(token)
-    return ok(user, { status: 201 })
+    return ok(challenge, { status: 201 })
   } catch (error) {
     return fail(error)
   }
 }
-

@@ -20,23 +20,24 @@ export default async function HistoryPage({ searchParams }: { searchParams: Sear
   const history = await getCustomerHistory(session.sub, type)
 
   return (
-    <section className='orders-shell space-y-4'>
-      <div className='orders-filter-bar rounded-2xl p-5'>
-        <h1 className='text-2xl font-black'>Purchase History</h1>
+    <section className='storefront-subpage-shell orders-shell space-y-4'>
+      <div className='storefront-subpage-hero orders-filter-bar rounded-2xl p-5'>
+        <span className='storefront-subpage-kicker'>Bily Card</span>
+        <h1 className='storefront-subpage-title'>سجل النشاط</h1>
         <p className='mt-2 text-sm text-slate-300'>سجل موحّد للطلبات ومعاملات المحفظة بترتيب زمني واضح.</p>
       </div>
 
       <div className='orders-filter-bar flex flex-wrap gap-2 p-3'>
         <Link href='/history?type=all' className={type === 'all' ? 'btn-primary' : 'btn-secondary'}>
-          all
+          الكل
         </Link>
         <Link href='/history?type=orders' className={type === 'orders' ? 'btn-primary' : 'btn-secondary'}>
-          orders
+          الطلبات
         </Link>
         <Link href='/history?type=wallet' className={type === 'wallet' ? 'btn-primary' : 'btn-secondary'}>
-          wallet
+          المحفظة
         </Link>
-        <span className='mr-auto text-xs text-slate-400'>{history.total} entries</span>
+        <span className='mr-auto text-xs text-slate-400'>{history.total} عنصر</span>
       </div>
 
       <div className='space-y-2'>
