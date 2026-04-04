@@ -38,16 +38,17 @@ export default function RightSidebar({
   const { t, direction } = useLocale()
   const isRtl = direction === 'rtl'
   const textAlign = isRtl ? 'text-right' : 'text-left'
+  const isHomeLikePath = currentPath === '/' || currentPath === '/categories/top'
 
   const sidebarItems: SidebarItem[] = [
     { key: 'nav_home', href: '/', icon: Home },
     { key: 'nav_wallet', href: '/wallet', icon: Wallet, value: walletBalance },
     { key: 'nav_orders', href: '/orders', icon: ChartColumn },
-    { key: 'nav_profile_report', href: '/profile', icon: User },
+    { key: 'nav_profile_report', href: '/profile#account-report', icon: User },
     { key: 'nav_history', href: '/history', icon: Bell },
     { key: 'nav_favorites', href: '/categories', icon: Heart },
     { key: 'nav_admin', href: '/admin', icon: ShieldCheck, adminOnly: true },
-    { key: 'nav_level', href: '#', icon: Sparkles },
+    { key: 'nav_level', href: '/profile#level-progress', icon: Sparkles },
     { key: 'nav_settings', href: '/profile', icon: Settings },
   ]
 
@@ -119,7 +120,7 @@ export default function RightSidebar({
                 href={item.href}
                 icon={item.icon}
                 value={item.value}
-                active={item.href !== '#' && currentPath === item.href}
+                active={item.href !== '#' && (item.key === 'nav_home' ? isHomeLikePath : currentPath === item.href.split('#')[0])}
               />
             ))}
         </div>

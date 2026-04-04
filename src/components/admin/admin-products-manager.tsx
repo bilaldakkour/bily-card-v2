@@ -1,8 +1,8 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { useMemo, useState } from 'react'
-import { AdminPageShell } from '@/components/admin/admin-page-shell'
+import { useEffect, useMemo, useState } from 'react'
+import { AdminPageShell, AdminStatCard, AdminStatGrid } from '@/components/admin/admin-page-shell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { adminCatalogCategories } from '@/modules/catalog/categories'
@@ -74,16 +74,61 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
   const [status, setStatus] = useState('')
   const [preview, setPreview] = useState<any>(null)
   const [pendingImage, setPendingImage] = useState<File | null>(null)
+  const [search, setSearch] = useState('')
 
   const selected = useMemo(() => products.find((p) => p._id === selectedId) ?? null, [products, selectedId])
+  const filteredProducts = useMemo(() => {
+    const query = normalizeAdminProductSearch(search)
+    if (!query) return products
+
+    return products.filter((product) => {
+      const haystack = normalizeAdminProductSearch(
+        [
+          product.name,
+          product.slug,
+          product.category,
+          product.kind,
+          product.description,
+          product.routingMode,
+          ...product.providerLinks.flatMap((link) => [link.provider, link.providerProductId, link.providerVariantId]),
+        ]
+          .filter(Boolean)
+          .join(' ')
+      )
+
+      return haystack.includes(query)
+    })
+  }, [products, search])
+  const productStats = useMemo(
+    () => ({
+      total: products.length,
+      active: products.filter((product) => product.active).length,
+      visible: products.filter((product) => product.visible && !product.hiddenFromCustomer).length,
+      providerLinked: products.filter((product) => product.providerLinks.length > 0).length,
+    }),
+    [products]
+  )
+
+  useEffect(() => {
+    if (products.length === 0) {
+      if (selectedId) setSelectedId('')
+      return
+    }
+
+    if (!selectedId || !products.some((product) => product._id === selectedId)) {
+      setSelectedId(products[0]?._id ?? '')
+    }
+  }, [products, selectedId])
 
   async function refresh() {
     const res = await fetch('/api/admin/products', { cache: 'no-store' })
     const json = await res.json()
-    const normalized = (json.data ?? []).map(normalizeProductForForm)
+    const normalized: AdminProduct[] = (json.data ?? []).map(normalizeProductForForm)
     setProducts(normalized)
     setPendingImage(null)
-    if (!selectedId && normalized[0]?._id) setSelectedId(normalized[0]._id)
+    setSelectedId((currentSelectedId) =>
+      normalized.some((product) => product._id === currentSelectedId) ? currentSelectedId : (normalized[0]?._id ?? '')
+    )
   }
 
   async function createProduct() {
@@ -298,17 +343,22 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
     await refresh()
   }
 
-  if (!selected) {
+  if (products.length === 0) {
     return (
       <AdminPageShell
         title='إدارة المنتجات'
         description='إدارة المنتجات والخيارات والتسعير والربط مع المزودين من مكان واحد.'
         actions={<Button onClick={createProduct}>New Product</Button>}
       >
-        <p className='text-sm text-slate-300'>لا يوجد منتجات بعد.</p>
+        <div className='admin-empty-state px-6 py-10'>
+          <div className='text-base font-semibold text-white'>لا توجد منتجات بعد</div>
+          <p className='mt-2 text-sm text-slate-300'>أضف أول منتج ليظهر هنا مباشرة داخل لوحة الإدارة.</p>
+        </div>
       </AdminPageShell>
     )
   }
+
+  if (!selected) return null
 
   return (
     <AdminPageShell
@@ -327,15 +377,49 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
     >
       {status ? <span className='text-xs text-cyan-300'>{status}</span> : null}
 
-      <div className='grid gap-3 lg:grid-cols-[280px_1fr]'>
+      <AdminStatGrid>
+        <AdminStatCard label='إجمالي المنتجات' value={String(productStats.total)} />
+        <AdminStatCard label='المنتجات النشطة' value={String(productStats.active)} tone='emerald' />
+        <AdminStatCard label='المنتجات الظاهرة' value={String(productStats.visible)} tone='cyan' />
+        <AdminStatCard label='المنتجات المرتبطة بمزوّد' value={String(productStats.providerLinked)} tone='amber' />
+      </AdminStatGrid>
+
+      <div className='admin-filter-shell space-y-3 p-4'>
+        <div className='surface-head flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between'>
+          <div>
+            <h2 className='text-base font-semibold text-white'>دليل المنتجات</h2>
+            <p className='mt-1 text-xs text-slate-400'>المنتجات الحالية معروضة هنا مباشرة مع بحث محلي سريع وحالة الإدارة.</p>
+          </div>
+          <div className='w-full max-w-xl'>
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder='ابحث بالاسم أو الرابط أو الفئة أو النوع...'
+            />
+          </div>
+        </div>
+
+        {filteredProducts.length === 0 ? (
+          <div className='admin-empty-state px-4 py-8'>
+            <div className='text-sm font-semibold text-white'>لا توجد نتائج مطابقة</div>
+            <p className='mt-1 text-xs text-slate-400'>جرّب تعديل كلمات البحث لإظهار المنتجات الموجودة.</p>
+          </div>
+        ) : null}
+      </div>
+
+      <div className='grid gap-3 lg:grid-cols-[360px_1fr]'>
         <div className='card-shell max-h-[75vh] overflow-auto p-3'>
           <div className='surface-head mb-3'>
             <h2 className='font-semibold text-white'>قائمة المنتجات</h2>
-            <p className='mt-1 text-xs text-slate-400'>اختر المنتج الذي تريد تعديله من القائمة.</p>
+            <p className='mt-1 text-xs text-slate-400'>
+              {filteredProducts.length === products.length
+                ? 'كل المنتجات الحالية معروضة هنا. اختر أي منتج للبدء بالتعديل.'
+                : `تمت مطابقة ${filteredProducts.length} من أصل ${products.length} منتج.`}
+            </p>
           </div>
 
           <div className='space-y-2'>
-            {products.map((product) => (
+            {filteredProducts.map((product) => (
               <button
                 key={product._id}
                 type='button'
@@ -350,8 +434,54 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                     : 'border-cyan-400/20 hover:border-cyan-300/30 hover:bg-white/[0.03]'
                 }`}
               >
-                <div className='text-sm font-semibold'>{product.name}</div>
-                <div className='text-xs text-slate-400'>{product.slug}</div>
+                <div className='flex items-start gap-3'>
+                  <div className='flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-cyan-400/15 bg-white/[0.03]'>
+                    {product.thumbnail ? (
+                      <img src={product.thumbnail} alt={product.name} className='h-full w-full object-cover' />
+                    ) : (
+                      <span className='text-[10px] text-slate-500'>No image</span>
+                    )}
+                  </div>
+
+                  <div className='min-w-0 flex-1 space-y-2'>
+                    <div className='flex items-start justify-between gap-2'>
+                      <div className='min-w-0'>
+                        <div className='truncate text-sm font-semibold text-white'>{product.name}</div>
+                        <div className='truncate text-[11px] text-slate-400'>{product.slug}</div>
+                      </div>
+                      <span className='admin-inline-badge'>{selectedId === product._id ? 'Editing' : 'Edit'}</span>
+                    </div>
+
+                    <div className='flex flex-wrap gap-1.5'>
+                      <span className='admin-inline-badge'>{product.category}</span>
+                      <span className='admin-inline-badge'>{product.kind}</span>
+                      <span className='admin-inline-badge'>{getAdminProductRoutingLabel(product)}</span>
+                      <span className={`admin-inline-badge ${product.active ? 'text-emerald-200' : 'text-rose-200'}`}>
+                        {product.active ? 'active' : 'inactive'}
+                      </span>
+                      <span
+                        className={`admin-inline-badge ${
+                          product.visible && !product.hiddenFromCustomer ? 'text-cyan-200' : 'text-amber-200'
+                        }`}
+                      >
+                        {product.visible && !product.hiddenFromCustomer ? 'visible' : 'hidden'}
+                      </span>
+                    </div>
+
+                    <div className='grid gap-2 text-[11px] text-slate-300 sm:grid-cols-2'>
+                      <div className='rounded-xl border border-cyan-400/10 bg-white/[0.02] px-2.5 py-2'>
+                        <div className='text-[10px] text-slate-500'>Price hint</div>
+                        <div className='mt-1 font-semibold text-white'>{getAdminProductPriceHint(product)}</div>
+                      </div>
+                      <div className='rounded-xl border border-cyan-400/10 bg-white/[0.02] px-2.5 py-2'>
+                        <div className='text-[10px] text-slate-500'>Management mode</div>
+                        <div className='mt-1 font-semibold text-white'>
+                          {product.providerLinks.length > 0 ? `${product.providerLinks.length} provider link(s)` : 'No provider links'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </button>
             ))}
           </div>
@@ -823,6 +953,32 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
     const next = { ...(selected.countConfig ?? {}), [key]: value }
     setSelectedValue('countConfig', next)
   }
+}
+
+function normalizeAdminProductSearch(value: string) {
+  return value.trim().toLocaleLowerCase()
+}
+
+function getAdminProductRoutingLabel(product: AdminProduct) {
+  if (product.routingMode === 'manual_only') return 'manual mode'
+  if (product.routingMode === 'provider_only') return 'provider mode'
+  return 'hybrid mode'
+}
+
+function getAdminProductPriceHint(product: AdminProduct) {
+  if (product.kind === 'count' && product.countConfig?.manualUnitPrice) {
+    return `${formatPreviewMoney(product.countConfig.manualUnitPrice)} / unit`
+  }
+
+  const packagePrices = product.packages
+    .map((pkg) => pkg.manualPriceMinor)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+
+  if (packagePrices.length > 0) {
+    return formatPreviewMoney(Math.min(...packagePrices) / 100)
+  }
+
+  return product.providerLinks.length > 0 ? 'Provider priced' : 'No price yet'
 }
 
 function SectionCard({

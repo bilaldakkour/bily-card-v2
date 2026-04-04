@@ -49,17 +49,18 @@ export default function BilyMobileNavigation({
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const isMobileProductPage = currentPath.startsWith('/products/')
   const textAlign = direction === 'rtl' ? 'text-right' : 'text-left'
+  const isHomeLikePath = currentPath === '/' || currentPath === '/categories/top'
 
   const quickLinks = useMemo(
     () => [
       { key: 'home', label: t('nav_home'), href: '/', icon: Home },
       { key: 'wallet', label: t('nav_wallet'), href: '/wallet', icon: Wallet },
       { key: 'orders', label: t('nav_orders'), href: '/orders', icon: ChartColumn },
-      { key: 'profile', label: t('nav_profile_report'), href: '/profile', icon: User },
+      { key: 'profile', label: t('nav_profile_report'), href: '/profile#account-report', icon: User },
       { key: 'history', label: t('nav_history'), href: '/history', icon: ChartColumn },
       { key: 'favorites', label: t('nav_favorites'), href: '#', icon: Heart },
       { key: 'admin', label: t('nav_admin'), href: '/admin', icon: ShieldCheck },
-      { key: 'level', label: t('nav_level'), href: '#', icon: ShieldCheck },
+      { key: 'level', label: t('nav_level'), href: '/profile#level-progress', icon: ShieldCheck },
       { key: 'settings', label: t('nav_settings'), href: '/profile', icon: Settings },
     ],
     [t]
@@ -163,7 +164,9 @@ export default function BilyMobileNavigation({
 
               <nav className='w-full space-y-1.5'>
                 {quickLinks.map((item) => {
-                  const isActive = item.href !== '#' && currentPath === item.href
+                  const isActive =
+                    item.href !== '#' &&
+                    (item.key === 'home' ? isHomeLikePath : currentPath === item.href.split('#')[0])
                   const Icon = item.icon
 
                   if (item.href === '#') {
@@ -225,7 +228,7 @@ export default function BilyMobileNavigation({
 
       <nav className={`fixed inset-x-0 bottom-2.5 z-40 px-3 md:hidden ${isMobileProductPage ? 'hidden' : ''}`} dir={direction}>
         <div className='theme-dock-shell mx-auto relative flex h-[65px] max-w-lg items-center justify-between rounded-[24px] border px-1.5 backdrop-blur-xl before:pointer-events-none before:absolute before:inset-x-6 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-violet-300/35 before:to-transparent after:pointer-events-none after:absolute after:inset-0 after:rounded-[24px] after:bg-gradient-to-t after:from-transparent after:to-cyan-300/[0.03]'>
-          <BottomNavItem href='/' label={t('nav_home')} icon={Home} active={currentPath === '/'} />
+          <BottomNavItem href='/' label={t('nav_home')} icon={Home} active={isHomeLikePath} />
           <BottomNavItem
             href='/history'
             label={t('nav_notifications')}

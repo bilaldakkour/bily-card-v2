@@ -14,13 +14,13 @@ export default async function ProfilePage() {
 
   return (
     <section className='storefront-subpage-shell dashboard-shell space-y-5 md:space-y-6'>
-      <div className='storefront-subpage-hero user-panel-shell section-card rounded-2xl p-5 md:p-6'>
+      <div id='level-progress' className='storefront-subpage-hero user-panel-shell section-card rounded-2xl p-5 md:p-6'>
         <span className='storefront-subpage-kicker'>Bily Card</span>
         <h1 className='storefront-subpage-title'>الملف الشخصي</h1>
         <p className='storefront-subpage-copy'>نظرة سريعة على حسابك والطلبات والمحفظة من نفس نسق الصفحة الرئيسية.</p>
       </div>
 
-      <div className='grid gap-3 md:grid-cols-2 md:gap-4'>
+      <div id='account-report' className='grid gap-3 md:grid-cols-2 md:gap-4'>
         <div className='user-panel-shell card-shell section-card space-y-2 p-4 md:p-5'>
           <h2 className='font-semibold'>بيانات الحساب</h2>
           <div className='card-divider' />

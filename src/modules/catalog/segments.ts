@@ -1,4 +1,5 @@
 import type { CatalogListItem } from '@/domain/types/catalog'
+import { adminCatalogCategories } from '@/modules/catalog/categories'
 
 export type CatalogSegment =
   | 'top'
@@ -15,7 +16,6 @@ type SegmentConfig = {
   title: string
   subtitle: string
   accent: 'cyan' | 'violet' | 'amber'
-  keywords: string[]
 }
 
 const segmentConfigs: Record<Exclude<CatalogSegment, 'top'>, SegmentConfig> = {
@@ -23,50 +23,72 @@ const segmentConfigs: Record<Exclude<CatalogSegment, 'top'>, SegmentConfig> = {
     title: 'التطبيقات',
     subtitle: 'أفضل التطبيقات والخدمات الرقمية المتوفرة الآن',
     accent: 'cyan',
-    keywords: ['app', 'apps', 'application', 'applications', 'تطبيق', 'تطبيقات'],
   },
   games: {
     title: 'الألعاب',
     subtitle: 'عروض وألعاب مطلوبة داخل Bily Card',
     accent: 'violet',
-    keywords: ['game', 'games', 'gaming', 'لعبة', 'ألعاب', 'العاب', 'شحن'],
   },
   cards: {
     title: 'البطاقات',
     subtitle: 'بطاقات رقمية متنوعة ومناسبة للشحن السريع',
     accent: 'amber',
-    keywords: ['بطاق', 'card', 'gift', 'voucher', 'itunes', 'playstation', 'xbox'],
   },
   wallets: {
     title: 'المحافظ',
     subtitle: 'منتجات المحافظ والتحويلات الرقمية الأكثر طلبًا',
     accent: 'cyan',
-    keywords: ['محفظ', 'wallet', 'wallets', 'pay', 'payment'],
   },
   balance: {
     title: 'الرصيد',
     subtitle: 'خدمات الرصيد والشحن المباشر المعروضة الآن',
     accent: 'violet',
-    keywords: ['رصيد', 'balance', 'credit', 'topup', 'top-up'],
   },
   social: {
-    title: 'السوشال ميديا',
-    subtitle: 'خدمات وتطبيقات السوشال ميديا الأكثر مبيعًا',
+    title: 'السوشيال ميديا',
+    subtitle: 'خدمات وتطبيقات السوشيال ميديا الأكثر مبيعًا',
     accent: 'amber',
-    keywords: ['social', 'instagram', 'tiktok', 'facebook', 'telegram', 'whatsapp', 'سوشيال', 'ميديا'],
   },
   entertainment: {
     title: 'الترفيه',
     subtitle: 'أقسام الترفيه والاشتراكات الترفيهية المميزة',
     accent: 'violet',
-    keywords: ['entertainment', 'stream', 'netflix', 'spotify', 'ترفيه', 'مشاهدة'],
   },
   accounts: {
     title: 'الحسابات والاشتراكات',
     subtitle: 'حسابات واشتراكات جاهزة بتسليم سريع',
     accent: 'cyan',
-    keywords: ['account', 'accounts', 'subscription', 'subscriptions', 'حساب', 'اشتراك', 'اشتراكات'],
   },
+}
+
+const categoryAliases: Record<Exclude<CatalogSegment, 'top'>, string[]> = {
+  cards: [adminCatalogCategories[0], 'البطاقات', 'cards', 'card'],
+  apps: [adminCatalogCategories[1], 'التطبيقات', 'apps', 'app'],
+  games: [adminCatalogCategories[2], 'الألعاب', 'games', 'game'],
+  wallets: [adminCatalogCategories[3], 'المحافظ', 'wallets', 'wallet'],
+  balance: [adminCatalogCategories[4], 'الرصيد', 'balance'],
+  social: [adminCatalogCategories[5], 'السوشيال ميديا', 'social media', 'social'],
+  entertainment: [adminCatalogCategories[6], 'الترفيه', 'entertainment'],
+  accounts: [adminCatalogCategories[7], 'الحسابات والاشتراكات', 'accounts', 'account'],
+}
+
+function normalizeCategoryKey(value: string | null | undefined) {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+}
+
+const normalizedCategorySegmentMap = new Map<string, Exclude<CatalogSegment, 'top'>>()
+
+for (const [segment, aliases] of Object.entries(categoryAliases) as Array<
+  [Exclude<CatalogSegment, 'top'>, string[]]
+>) {
+  for (const alias of aliases) {
+    normalizedCategorySegmentMap.set(normalizeCategoryKey(alias), segment)
+  }
 }
 
 export const storefrontCatalogSegments: Exclude<CatalogSegment, 'top'>[] = [
@@ -97,14 +119,12 @@ export function getCatalogSegmentMeta(segment: CatalogSegment) {
   return segmentConfigs[segment]
 }
 
+export function resolveCatalogSegmentFromCategory(category: string | null | undefined) {
+  return normalizedCategorySegmentMap.get(normalizeCategoryKey(category)) ?? null
+}
+
 export function getProductsForSegment(products: CatalogListItem[], segment: CatalogSegment) {
   if (segment === 'top') return products
 
-  const { keywords } = segmentConfigs[segment]
-
-  return products
-    .filter((product) => {
-      const haystack = `${product.name} ${product.category} ${product.description}`.toLowerCase()
-      return keywords.some((keyword) => haystack.includes(keyword.toLowerCase()))
-    })
+  return products.filter((product) => resolveCatalogSegmentFromCategory(product.category) === segment)
 }

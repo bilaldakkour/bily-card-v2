@@ -3,7 +3,7 @@ export const revalidate = 0
 
 import { unstable_noStore as noStore } from 'next/cache'
 import { notFound } from 'next/navigation'
-import { ProductCard } from '@/components/catalog/product-card'
+import { CategoryProductCard } from '@/components/catalog/category-product-card'
 import BilyQuickCategoriesBar from '@/components/layout/BilyQuickCategoriesBar'
 import type { CatalogListItem } from '@/domain/types/catalog'
 import { getCatalogList } from '@/modules/catalog/service'
@@ -92,7 +92,7 @@ function CategoryGroupSection({
       {products.length > 0 ? (
         <div className='product-grid storefront-commerce-grid storefront-category-grid'>
           {products.map((product) => (
-            <ProductCard key={`${title}-${product.id}`} product={product} compact />
+            <CategoryProductCard key={`${title}-${product.id}`} product={product} />
           ))}
         </div>
       ) : (
