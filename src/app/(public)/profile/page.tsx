@@ -27,7 +27,7 @@ export default async function ProfilePage() {
           <Row label='الاسم' value={profile.user.name} />
           <Row label='البريد' value={profile.user.email} />
           <Row label='الدور' value={profile.user.role} />
-          <Row label='الحالة' value={profile.user.isActive ? 'active' : 'inactive'} />
+          <Row label='الحالة' value={profile.user.isActive ? 'نشط' : 'غير نشط'} />
           <Row label='تاريخ الانضمام' value={new Date(profile.user.createdAt).toLocaleDateString()} />
         </div>
 

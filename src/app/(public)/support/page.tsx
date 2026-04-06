@@ -11,7 +11,7 @@ export default async function SupportPage() {
 
   return (
     <section className='storefront-subpage-shell space-y-4'>
-      <div className='storefront-subpage-hero rounded-2xl border border-cyan-300/20 bg-gradient-to-br from-[#0f1730] to-[#111b37] p-5'>
+      <div className='storefront-subpage-hero rounded-2xl border p-5'>
         <span className='storefront-subpage-kicker'>Bily Card</span>
         <h1 className='storefront-subpage-title'>الدعم والمساعدة</h1>
         <p className='storefront-subpage-copy mt-2 text-sm text-slate-300'>

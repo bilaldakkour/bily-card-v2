@@ -54,7 +54,7 @@ export default function RightSidebar({
 
   return (
     <aside
-      className='sidebar-panel-refined h-full w-full shrink-0 overflow-y-auto overflow-x-hidden border-l text-white [scrollbar-width:thin] [scrollbar-color:rgba(34,211,238,0.3)_transparent]'
+      className='sidebar-panel-refined h-full w-full shrink-0 overflow-y-auto overflow-x-hidden border-l [scrollbar-width:thin] [scrollbar-color:rgba(34,211,238,0.3)_transparent]'
       dir={direction}
     >
       <div className='flex min-h-full flex-col gap-4 px-4 py-5'>

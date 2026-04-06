@@ -81,7 +81,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }).format(new Date())
 
   return (
-    <main className='app-shell-surface min-h-screen text-white'>
+    <main className='app-shell-surface min-h-screen'>
       <div className='grid min-h-screen md:grid-cols-[272px_1fr]'>
         <aside className='admin-sidebar-shell hidden border-r border-cyan-400/10 md:sticky md:top-0 md:block md:h-screen'>
           <div className='flex h-full flex-col'>

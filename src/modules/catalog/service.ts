@@ -245,6 +245,31 @@ function resolveManualCountUnitPrice(countConfig: any) {
   return 0
 }
 
+function resolveCatalogPurchasableState(input: {
+  kind: 'package' | 'count' | 'manual'
+  forceOutOfStock?: boolean
+  active: boolean
+  visible: boolean
+  routingMode: 'manual_only' | 'provider_only' | 'cheapest_with_fallback'
+  manualStock: number | null
+  countProviderAvailable?: boolean | null
+  packageAvailabilities?: boolean[]
+}) {
+  if (input.forceOutOfStock) return false
+  if (input.kind === 'count') {
+    return resolveStock({
+      providerAvailable: input.routingMode === 'manual_only' ? null : input.countProviderAvailable ?? null,
+      manualStock: input.manualStock,
+      isManualProduct: input.routingMode === 'manual_only',
+      active: input.active,
+      visible: input.visible,
+    })
+  }
+
+  if (!input.visible || !input.active) return false
+  return (input.packageAvailabilities ?? []).some(Boolean)
+}
+
 export function clearCatalogCache() {
   listCache.clear()
   detailCache.clear()
@@ -355,16 +380,20 @@ export async function getCatalogList(options?: { fresh?: boolean }) {
         })
 
         finalPriceFrom = pricing.finalPrice
-        available = resolveStock({
-          providerAvailable: isManualCount ? null : providerQuote?.available ?? null,
-          manualStock: product.manualStock,
-          isManualProduct: isManualCount,
+        available = resolveCatalogPurchasableState({
+          kind: product.kind,
+          forceOutOfStock: product.forceOutOfStock,
           active: true,
           visible: true,
+          routingMode: product.routingMode,
+          manualStock: product.manualStock,
+          countProviderAvailable: isManualCount ? null : providerQuote?.available ?? null,
         })
-        if (product.forceOutOfStock) available = false
       } else {
-        const firstPackage = product.packages?.[0]
+        const visiblePackages = (product.packages ?? [])
+          .filter((pkg: any) => pkg.visible !== false && pkg.active !== false)
+          .sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+        const firstPackage = visiblePackages[0]
         const selectedKey = firstPackage?.key ?? '__default__'
         const packageMargin = resolvePackageMarginPercent(rule?.packageMarginOverrides, selectedKey, marginPercent)
         const priceState = packagePrice(
@@ -381,14 +410,29 @@ export async function getCatalogList(options?: { fresh?: boolean }) {
         )
 
         finalPriceFrom = priceState.pricing.finalPrice
-        available = resolveStock({
-          providerAvailable: priceState.available,
-          manualStock: product.manualStock,
-          isManualProduct: product.kind === 'manual',
+        const packageAvailabilities = visiblePackages.map((pkg: any) =>
+          packagePrice(
+            id,
+            pkg.key,
+            providerLinksByKey,
+            providerCostMap,
+            product.routingMode,
+            resolvePackageMarginPercent(rule?.packageMarginOverrides, pkg.key, marginPercent),
+            roundingMode,
+            discountPercent,
+            pkg.manualPriceMinor ?? null,
+            pkg.manualStock ?? null
+          ).available
+        )
+        available = resolveCatalogPurchasableState({
+          kind: product.kind,
+          forceOutOfStock: product.forceOutOfStock,
           active: true,
           visible: true,
+          routingMode: product.routingMode,
+          manualStock: product.manualStock,
+          packageAvailabilities,
         })
-        if (product.forceOutOfStock) available = false
       }
 
       return {
@@ -556,14 +600,16 @@ export async function getCatalogDetailBySlug(slug: string) {
           })()
         : null
 
-    const available = resolveStock({
-      providerAvailable: product.kind === 'count' ? countProviderAvailable : packages.some((p) => p.available),
-      manualStock: product.manualStock,
-      isManualProduct: product.kind === 'manual' || (product.kind === 'count' && product.routingMode === 'manual_only'),
+    const finalAvailable = resolveCatalogPurchasableState({
+      kind: product.kind,
+      forceOutOfStock: product.forceOutOfStock,
       active: product.active,
       visible: product.visible,
+      routingMode: product.routingMode,
+      manualStock: product.manualStock,
+      countProviderAvailable,
+      packageAvailabilities: packages.map((p) => p.available),
     })
-    const finalAvailable = product.forceOutOfStock ? false : available
 
     const detail: CatalogDetail = {
       id: String(product._id),

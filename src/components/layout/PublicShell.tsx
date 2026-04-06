@@ -29,7 +29,7 @@ export default function PublicShell({
   }, [])
 
   return (
-    <div className='app-shell-surface min-h-screen overflow-x-hidden text-white'>
+    <div className='app-shell-surface min-h-screen overflow-x-hidden'>
       <aside className='hidden lg:fixed lg:inset-y-0 lg:right-0 lg:z-[88] lg:block lg:w-[312px]'>
         <div className='desktop-sidebar-surface h-full overflow-y-auto border-l'>
           <RightSidebar currentPath={pathname} isAdmin={isAdmin} walletBalance={walletBalance} />

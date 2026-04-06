@@ -134,7 +134,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
   async function createProduct() {
     const payload = {
       slug: `new-product-${Date.now()}`,
-      name: 'New Product',
+      name: 'منتج جديد',
       description: '',
       thumbnail: null,
       category: adminCatalogCategories[0],
@@ -247,11 +247,11 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
     })
 
     if (!res.ok) {
-      setStatus('ظپط´ظ„ ط­ظپط¸ طµظˆط±ط© ط§ظ„ظ…ظ†طھط¬')
+      setStatus('فشل حفظ صورة المنتج')
       return
     }
 
-    setStatus('طھظ… ط­ظپط¸ ط¨ظٹط§ظ†ط§طھ ط§ظ„ظ…ظ†طھط¬')
+    setStatus('تم حفظ بيانات المنتج')
     setPendingImage(null)
     await refresh()
   }
@@ -348,7 +348,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
       <AdminPageShell
         title='إدارة المنتجات'
         description='إدارة المنتجات والخيارات والتسعير والربط مع المزودين من مكان واحد.'
-        actions={<Button onClick={createProduct}>New Product</Button>}
+        actions={<Button onClick={createProduct}>إضافة منتج</Button>}
       >
         <div className='admin-empty-state px-6 py-10'>
           <div className='text-base font-semibold text-white'>لا توجد منتجات بعد</div>
@@ -375,7 +375,11 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
         </>
       }
     >
-      {status ? <span className='text-xs text-cyan-300'>{status}</span> : null}
+      {status ? (
+        <div className='rounded-2xl border border-cyan-400/20 bg-cyan-400/8 px-4 py-3 text-xs font-medium text-cyan-200'>
+          {status}
+        </div>
+      ) : null}
 
       <AdminStatGrid>
         <AdminStatCard label='إجمالي المنتجات' value={String(productStats.total)} />
@@ -384,11 +388,22 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
         <AdminStatCard label='المنتجات المرتبطة بمزوّد' value={String(productStats.providerLinked)} tone='amber' />
       </AdminStatGrid>
 
-      <div className='admin-filter-shell space-y-3 p-4'>
+      <SectionCard
+        title='مركز إدارة المنتجات'
+        description='اعرض المنتجات الحالية مباشرة، ابحث بسرعة، ثم افتح أي منتج للتعديل الكامل من نفس الصفحة.'
+        action={
+          <div className='flex flex-wrap items-center gap-2 text-[11px] text-slate-400'>
+            <span className='admin-inline-badge'>{filteredProducts.length} نتيجة</span>
+            <span className='admin-inline-badge'>{selected ? `المحدد: ${selected.name}` : 'لا يوجد منتج محدد'}</span>
+          </div>
+        }
+      >
         <div className='surface-head flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between'>
           <div>
             <h2 className='text-base font-semibold text-white'>دليل المنتجات</h2>
-            <p className='mt-1 text-xs text-slate-400'>المنتجات الحالية معروضة هنا مباشرة مع بحث محلي سريع وحالة الإدارة.</p>
+            <p className='mt-1 text-xs text-slate-400'>
+              المنتجات الحالية ظاهرة هنا فورًا مع بحث محلي سريع وحالة الإدارة والربط والسعر.
+            </p>
           </div>
           <div className='w-full max-w-xl'>
             <Input
@@ -404,21 +419,8 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
             <div className='text-sm font-semibold text-white'>لا توجد نتائج مطابقة</div>
             <p className='mt-1 text-xs text-slate-400'>جرّب تعديل كلمات البحث لإظهار المنتجات الموجودة.</p>
           </div>
-        ) : null}
-      </div>
-
-      <div className='grid gap-3 lg:grid-cols-[360px_1fr]'>
-        <div className='card-shell max-h-[75vh] overflow-auto p-3'>
-          <div className='surface-head mb-3'>
-            <h2 className='font-semibold text-white'>قائمة المنتجات</h2>
-            <p className='mt-1 text-xs text-slate-400'>
-              {filteredProducts.length === products.length
-                ? 'كل المنتجات الحالية معروضة هنا. اختر أي منتج للبدء بالتعديل.'
-                : `تمت مطابقة ${filteredProducts.length} من أصل ${products.length} منتج.`}
-            </p>
-          </div>
-
-          <div className='space-y-2'>
+        ) : (
+          <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'>
             {filteredProducts.map((product) => (
               <button
                 key={product._id}
@@ -428,79 +430,109 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                   setPreview(null)
                   setPendingImage(null)
                 }}
-                className={`w-full rounded-2xl border p-3 text-right transition ${
+                className={`w-full rounded-[1.35rem] border p-4 text-right transition ${
                   selectedId === product._id
-                    ? 'border-cyan-300 bg-cyan-400/10 shadow-[0_0_0_1px_rgba(34,211,238,0.12)]'
-                    : 'border-cyan-400/20 hover:border-cyan-300/30 hover:bg-white/[0.03]'
+                    ? 'border-cyan-300 bg-cyan-400/10 shadow-[0_0_0_1px_rgba(34,211,238,0.14)]'
+                    : 'border-cyan-400/15 bg-white/[0.02] hover:border-cyan-300/30 hover:bg-white/[0.035]'
                 }`}
+                aria-pressed={selectedId === product._id}
               >
-                <div className='flex items-start gap-3'>
-                  <div className='flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-cyan-400/15 bg-white/[0.03]'>
-                    {product.thumbnail ? (
-                      <img src={product.thumbnail} alt={product.name} className='h-full w-full object-cover' />
-                    ) : (
-                      <span className='text-[10px] text-slate-500'>No image</span>
-                    )}
-                  </div>
-
-                  <div className='min-w-0 flex-1 space-y-2'>
-                    <div className='flex items-start justify-between gap-2'>
-                      <div className='min-w-0'>
-                        <div className='truncate text-sm font-semibold text-white'>{product.name}</div>
-                        <div className='truncate text-[11px] text-slate-400'>{product.slug}</div>
-                      </div>
-                      <span className='admin-inline-badge'>{selectedId === product._id ? 'Editing' : 'Edit'}</span>
+                <div className='flex h-full flex-col gap-3'>
+                  <div className='flex items-start gap-3'>
+                    <div className='flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-cyan-400/12 bg-white/[0.03]'>
+                      {product.thumbnail ? (
+                        <img src={product.thumbnail} alt={product.name} className='h-full w-full object-cover' />
+                      ) : (
+                        <span className='text-[10px] text-slate-500'>لا توجد صورة</span>
+                      )}
                     </div>
 
+                    <div className='min-w-0 flex-1 space-y-2'>
+                      <div className='flex items-start justify-between gap-2'>
+                        <div className='min-w-0'>
+                          <div className='line-clamp-2 text-sm font-semibold leading-6 text-white'>{product.name}</div>
+                          <div className='mt-1 truncate text-[11px] text-slate-400'>{product.slug}</div>
+                        </div>
+                        <span className='admin-inline-badge'>{selectedId === product._id ? 'محدد' : 'تحرير'}</span>
+                      </div>
+
+                      <div className='flex flex-wrap gap-1.5'>
+                        <span className='admin-inline-badge'>{product.category}</span>
+                        <span className='admin-inline-badge'>{product.kind}</span>
+                        <span className='admin-inline-badge'>{getAdminProductRoutingLabel(product)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className='grid gap-2 text-[11px] text-slate-300 sm:grid-cols-2'>
+                    <div className='rounded-xl border border-cyan-400/10 bg-white/[0.02] px-2.5 py-2'>
+                      <div className='text-[10px] text-slate-500'>مؤشر السعر</div>
+                      <div className='mt-1 font-semibold text-white'>{getAdminProductPriceHint(product)}</div>
+                    </div>
+                    <div className='rounded-xl border border-cyan-400/10 bg-white/[0.02] px-2.5 py-2'>
+                      <div className='text-[10px] text-slate-500'>الربط والتنفيذ</div>
+                      <div className='mt-1 font-semibold text-white'>
+                        {product.providerLinks.length > 0 ? `${product.providerLinks.length} روابط مزود` : 'تنفيذ محلي فقط'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className='flex flex-wrap items-center justify-between gap-2 pt-1'>
                     <div className='flex flex-wrap gap-1.5'>
-                      <span className='admin-inline-badge'>{product.category}</span>
-                      <span className='admin-inline-badge'>{product.kind}</span>
-                      <span className='admin-inline-badge'>{getAdminProductRoutingLabel(product)}</span>
                       <span className={`admin-inline-badge ${product.active ? 'text-emerald-200' : 'text-rose-200'}`}>
-                        {product.active ? 'active' : 'inactive'}
+                        {product.active ? 'نشط' : 'غير نشط'}
                       </span>
                       <span
                         className={`admin-inline-badge ${
                           product.visible && !product.hiddenFromCustomer ? 'text-cyan-200' : 'text-amber-200'
                         }`}
                       >
-                        {product.visible && !product.hiddenFromCustomer ? 'visible' : 'hidden'}
+                        {product.visible && !product.hiddenFromCustomer ? 'ظاهر للعملاء' : 'مخفي عن العملاء'}
                       </span>
                     </div>
 
-                    <div className='grid gap-2 text-[11px] text-slate-300 sm:grid-cols-2'>
-                      <div className='rounded-xl border border-cyan-400/10 bg-white/[0.02] px-2.5 py-2'>
-                        <div className='text-[10px] text-slate-500'>Price hint</div>
-                        <div className='mt-1 font-semibold text-white'>{getAdminProductPriceHint(product)}</div>
-                      </div>
-                      <div className='rounded-xl border border-cyan-400/10 bg-white/[0.02] px-2.5 py-2'>
-                        <div className='text-[10px] text-slate-500'>Management mode</div>
-                        <div className='mt-1 font-semibold text-white'>
-                          {product.providerLinks.length > 0 ? `${product.providerLinks.length} provider link(s)` : 'No provider links'}
-                        </div>
-                      </div>
-                    </div>
+                    <span className='inline-flex items-center rounded-xl border border-cyan-400/20 px-3 py-1.5 text-[11px] font-semibold text-cyan-100'>
+                      فتح التعديل
+                    </span>
                   </div>
                 </div>
               </button>
             ))}
           </div>
-        </div>
+        )}
+      </SectionCard>
 
-        <div className='space-y-3'>
-          <SectionCard title='Core' description='البيانات الأساسية التي تظهر وتعتمد عليها بنية المنتج.'>
+      <div className='card-shell p-4'>
+        <div className='surface-head flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
+          <div>
+            <h2 className='text-base font-semibold text-white'>تحرير المنتج المحدد</h2>
+            <p className='mt-1 text-xs text-slate-400'>
+              افتح المنتج من الدليل أعلاه، ثم أكمل التعديل والحفظ من البطاقات التالية بدون تغيير أي سير عمل حالي.
+            </p>
+          </div>
+          <div className='flex flex-wrap items-center gap-2 text-[11px] text-slate-300'>
+            <span className='admin-inline-badge'>{selected.name}</span>
+            <span className='admin-inline-badge'>{selected.slug}</span>
+            <span className='admin-inline-badge'>{selected.category}</span>
+            <span className='admin-inline-badge'>{getAdminProductRoutingLabel(selected)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className='space-y-3'>
+          <SectionCard title='البيانات الأساسية' description='البيانات الأساسية التي تظهر وتعتمد عليها بنية المنتج.'>
             <div className='grid gap-2 sm:grid-cols-2'>
-              <Input value={selected.name} onChange={(e) => setSelectedValue('name', e.target.value)} placeholder='Name' />
-              <Input value={selected.slug} onChange={(e) => setSelectedValue('slug', e.target.value)} placeholder='Slug' />
+              <Input value={selected.name} onChange={(e) => setSelectedValue('name', e.target.value)} placeholder='اسم المنتج' />
+              <Input value={selected.slug} onChange={(e) => setSelectedValue('slug', e.target.value)} placeholder='الرابط المختصر' />
               <Input
                 value={selected.description ?? ''}
                 onChange={(e) => setSelectedValue('description', e.target.value)}
-                placeholder='Description'
+                placeholder='وصف مختصر'
               />
               <Input
                 value={selected.thumbnail ?? ''}
                 onChange={(e) => setSelectedValue('thumbnail', e.target.value || null)}
-                placeholder='Image URL'
+                placeholder='رابط الصورة'
               />
               <select
                 className='select-shell'
@@ -541,7 +573,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
 
             <div className='grid gap-3 lg:grid-cols-[1fr_220px]'>
               <label className='space-y-2 rounded-2xl border border-cyan-400/15 bg-white/[0.02] p-3 text-sm text-slate-200'>
-                <span className='block text-xs text-slate-400'>Upload Product Image</span>
+                <span className='block text-xs text-slate-400'>رفع صورة المنتج</span>
                 <input
                   type='file'
                   accept='image/*'
@@ -549,7 +581,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                   className='block w-full text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-cyan-400/20 file:px-3 file:py-2 file:text-cyan-100'
                 />
                 <span className='block text-xs text-slate-500'>
-                  {pendingImage ? pendingImage.name : 'The file will be saved into public/uploads/products.'}
+                  {pendingImage ? pendingImage.name : 'سيتم حفظ الملف داخل public/uploads/products.'}
                 </span>
               </label>
 
@@ -567,7 +599,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                     className='h-full max-h-[132px] w-full rounded-xl object-cover'
                   />
                 ) : (
-                  <span className='text-xs text-slate-500'>No image selected</span>
+                  <span className='text-xs text-slate-500'>لم يتم اختيار صورة</span>
                 )}
               </div>
             </div>
@@ -597,7 +629,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                   step='0.000001'
                   value={selected.countConfig?.manualUnitPrice ?? ''}
                   onChange={(e) => updateCountConfig('manualUnitPrice', e.target.value ? Number(e.target.value) : null)}
-                  placeholder='Price per 1 unit'
+                  placeholder='سعر الوحدة الواحدة'
                 />
               </div>
             ) : null}
@@ -605,11 +637,11 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
             <div className='flex flex-wrap gap-3 text-sm'>
               <label className='inline-flex items-center gap-1'>
                 <input type='checkbox' checked={selected.visible} onChange={(e) => setSelectedValue('visible', e.target.checked)} />
-                visible
+                ظاهر
               </label>
               <label className='inline-flex items-center gap-1'>
                 <input type='checkbox' checked={selected.active} onChange={(e) => setSelectedValue('active', e.target.checked)} />
-                active
+                نشط
               </label>
               <label className='inline-flex items-center gap-1'>
                 <input
@@ -617,7 +649,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                   checked={selected.forceOutOfStock ?? false}
                   onChange={(e) => setSelectedValue('forceOutOfStock', e.target.checked)}
                 />
-                forceOutOfStock
+                نفاد إجباري
               </label>
               <label className='inline-flex items-center gap-1'>
                 <input
@@ -625,15 +657,15 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                   checked={selected.hiddenFromCustomer ?? false}
                   onChange={(e) => setSelectedValue('hiddenFromCustomer', e.target.checked)}
                 />
-                hiddenFromCustomer
+                مخفي عن العميل
               </label>
             </div>
 
-            <Button onClick={saveCoreWithUpload}>Save Core</Button>
+            <Button onClick={saveCoreWithUpload}>حفظ البيانات الأساسية</Button>
           </SectionCard>
 
           <SectionCard
-            title='Packages / Variants'
+            title='الباقات والمتغيرات'
             description='إدارة الباقات الظاهرة للعميل مع الترتيب والسعر.'
             action={
               <Button
@@ -651,7 +683,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                   ])
                 }
               >
-                Add Package
+                  إضافة باقة
               </Button>
             }
           >
@@ -680,11 +712,11 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                   <div className='mt-2 flex flex-wrap gap-2 text-xs'>
                     <label className='inline-flex items-center gap-1'>
                       <input type='checkbox' checked={pkg.visible} onChange={(e) => updatePackage(index, 'visible', e.target.checked)} />
-                      visible
+                      ظاهر
                     </label>
                     <label className='inline-flex items-center gap-1'>
                       <input type='checkbox' checked={pkg.active} onChange={(e) => updatePackage(index, 'active', e.target.checked)} />
-                      active
+                      نشط
                     </label>
                     <button
                       type='button'
@@ -696,17 +728,17 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                         )
                       }
                     >
-                      remove
+                      حذف
                     </button>
                   </div>
                 </div>
               ))}
             </div>
 
-            <Button onClick={savePackages}>Save Packages</Button>
+            <Button onClick={savePackages}>حفظ الباقات</Button>
           </SectionCard>
 
-          <SectionCard title='Pricing Controls' description='إعدادات الهوامش والخصومات وآلية التقريب.'>
+          <SectionCard title='إعدادات التسعير' description='إعدادات الهوامش والخصومات وآلية التقريب.'>
             <div className='grid gap-2 sm:grid-cols-2'>
               <Input
                 type='number'
@@ -742,7 +774,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
 
             {selected.kind !== 'count' && selected.packages.length > 0 ? (
               <div className='space-y-2 rounded-2xl border border-cyan-400/15 bg-white/[0.02] p-3'>
-                <div className='text-sm font-semibold text-white'>Package Margin Overrides</div>
+                <div className='text-sm font-semibold text-white'>تجاوز هوامش الباقات</div>
                 <p className='text-xs text-slate-400'>إذا تركت الحقل فارغًا، سيأخذ الباكدج النسبة العامة للمنتج.</p>
                 <div className='grid gap-2 sm:grid-cols-2'>
                   {selected.packages.map((pkg) => (
@@ -767,14 +799,14 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                 checked={(selected.pricingRule ?? defaultPricing).isDiscountEnabled}
                 onChange={(e) => setPricingValue('isDiscountEnabled', e.target.checked)}
               />
-              discount enabled
+              تفعيل الخصم
             </label>
 
-            <Button onClick={savePricing}>Save Pricing</Button>
+            <Button onClick={savePricing}>حفظ إعدادات التسعير</Button>
           </SectionCard>
 
           <SectionCard
-            title='Provider Links'
+            title='روابط المزود'
             description='ربط المنتج بالمزود المناسب مع ترتيب الأولوية.'
             action={
               <Button
@@ -796,7 +828,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                   ])
                 }
               >
-                Add Link
+                إضافة رابط
               </Button>
             }
           >
@@ -837,7 +869,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                   <div className='mt-2 flex flex-wrap gap-2 text-xs'>
                     <label className='inline-flex items-center gap-1'>
                       <input type='checkbox' checked={link.isPrimary} onChange={(e) => updateProviderLink(index, 'isPrimary', e.target.checked)} />
-                      primary
+                      أساسي
                     </label>
                     <label className='inline-flex items-center gap-1'>
                       <input
@@ -848,7 +880,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                           updateProviderLink(index, 'active', e.target.checked)
                         }}
                       />
-                      enabled
+                      مفعّل
                     </label>
                     <label className='inline-flex items-center gap-1'>
                       <input
@@ -856,7 +888,7 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                         checked={link.forceProvider ?? false}
                         onChange={(e) => updateProviderLink(index, 'forceProvider', e.target.checked)}
                       />
-                      force
+                      إجباري
                     </label>
                     <button
                       type='button'
@@ -868,22 +900,22 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                         )
                       }
                     >
-                      remove
+                      حذف
                     </button>
                   </div>
                 </div>
               ))}
             </div>
 
-            <Button onClick={saveProviders}>Save Provider Links</Button>
+            <Button onClick={saveProviders}>حفظ روابط المزود</Button>
           </SectionCard>
 
           <SectionCard
-            title='Final Visible Price Preview'
+            title='معاينة السعر النهائي الظاهر'
             description='معاينة سريعة للسعر والظهور النهائي قبل الحفظ.'
             action={
               <Button variant='secondary' onClick={loadPreview}>
-                Refresh Preview
+                تحديث المعاينة
               </Button>
             }
           >
@@ -902,11 +934,10 @@ export function AdminProductsManager({ initialProducts }: { initialProducts: Adm
                 ) : null}
               </div>
             ) : (
-              <p className='text-sm text-slate-300'>اضغط Refresh Preview لرؤية السعر النهائي الظاهر للعميل.</p>
+              <p className='text-sm text-slate-300'>اضغط تحديث المعاينة لرؤية السعر النهائي الظاهر للعميل.</p>
             )}
           </SectionCard>
         </div>
-      </div>
     </AdminPageShell>
   )
 
@@ -960,14 +991,14 @@ function normalizeAdminProductSearch(value: string) {
 }
 
 function getAdminProductRoutingLabel(product: AdminProduct) {
-  if (product.routingMode === 'manual_only') return 'manual mode'
-  if (product.routingMode === 'provider_only') return 'provider mode'
-  return 'hybrid mode'
+  if (product.routingMode === 'manual_only') return 'يدوي فقط'
+  if (product.routingMode === 'provider_only') return 'مزود فقط'
+  return 'وضع هجين'
 }
 
 function getAdminProductPriceHint(product: AdminProduct) {
   if (product.kind === 'count' && product.countConfig?.manualUnitPrice) {
-    return `${formatPreviewMoney(product.countConfig.manualUnitPrice)} / unit`
+    return `${formatPreviewMoney(product.countConfig.manualUnitPrice)} / وحدة`
   }
 
   const packagePrices = product.packages
@@ -978,7 +1009,7 @@ function getAdminProductPriceHint(product: AdminProduct) {
     return formatPreviewMoney(Math.min(...packagePrices) / 100)
   }
 
-  return product.providerLinks.length > 0 ? 'Provider priced' : 'No price yet'
+  return product.providerLinks.length > 0 ? 'السعر يأتي من المزود' : 'لا يوجد سعر بعد'
 }
 
 function SectionCard({

@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useDeferredValue, useMemo, useState } from 'react'
 import { Bell, Menu, Search, UserRound, Wallet } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
-import type { HomeBanner } from '@/features/home/banner.types'
 import { useLocale } from '@/components/i18n/locale-provider'
 import { searchSuggestionItems } from '@/modules/search/utils'
 
@@ -20,7 +19,6 @@ type SearchItem = {
 type BilyTopHeaderProps = {
   searchItems: SearchItem[]
   walletBalance?: string
-  banners: HomeBanner[]
 }
 
 export default function BilyTopHeader({

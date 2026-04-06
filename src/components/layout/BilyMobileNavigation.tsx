@@ -58,7 +58,7 @@ export default function BilyMobileNavigation({
       { key: 'orders', label: t('nav_orders'), href: '/orders', icon: ChartColumn },
       { key: 'profile', label: t('nav_profile_report'), href: '/profile#account-report', icon: User },
       { key: 'history', label: t('nav_history'), href: '/history', icon: ChartColumn },
-      { key: 'favorites', label: t('nav_favorites'), href: '#', icon: Heart },
+      { key: 'favorites', label: t('nav_favorites'), href: '/categories', icon: Heart },
       { key: 'admin', label: t('nav_admin'), href: '/admin', icon: ShieldCheck },
       { key: 'level', label: t('nav_level'), href: '/profile#level-progress', icon: ShieldCheck },
       { key: 'settings', label: t('nav_settings'), href: '/profile', icon: Settings },
